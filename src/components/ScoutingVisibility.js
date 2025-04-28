@@ -221,7 +221,8 @@ const Scouting = () => {
               top: 0, left: 0, right: 0, bottom: 0,
               backgroundColor: scoutVisibility ? "#4ad4d4" : "#ccc",
               borderRadius: "34px",
-              transition: ".4s"
+              transition: ".4s",
+              marginTop: "10px"
             }}
           />
         </label>

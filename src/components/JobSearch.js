@@ -27,12 +27,15 @@ const JobSearch = () => {
       const fetchJobs = async () => {
         const jobsCollection = collection(db, "jobs");
         const jobSnapshot = await getDocs(jobsCollection);
-        const jobList = jobSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          averageScore: parseFloat(doc.data().averageScore || 0),
-        }));
-  
+      
+        const jobList = jobSnapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            averageScore: parseFloat(doc.data().averageScore || 0),
+          }))
+          .filter((job) => job.status?.toLowerCase() !== "closed"); // Filter out closed jobs
+      
         setJobs(jobList);
         setFilteredJobs(jobList);
       };
@@ -131,12 +134,12 @@ const JobSearch = () => {
         }
     
         const userData = userSnap.data();
-        const { name, resumeURL, certifications = [], githubLink, email } = userData;
+        const { name,certifications = [], githubRepo, email } = userData;
     
-        if (!resumeURL) {
-          alert("No Resume Applied");
-          return;
-        }
+        // if (!resumeURL) {
+        //   alert("No Resume Applied");
+        //   return;
+        // }
     
         // Get submissions
         const submissionsRef = collection(db, "applicants", userId, "submissions");
@@ -150,9 +153,8 @@ const JobSearch = () => {
           jobId,
           appliedAt: Timestamp.now(),
           name,
-          resumeURL,
           certifications,
-          githubLink,
+          githubRepo,
           email,
           submissions,
         };
@@ -368,6 +370,7 @@ const JobSearch = () => {
             padding: "20px",
             zIndex: 1000,
             overflowY: "auto",
+            animation: "fadeIn 0.3s ease",
           }}
         >
           <h3>{expandedJob.title}</h3>
@@ -385,15 +388,25 @@ const JobSearch = () => {
                 borderRadius: "8px",
               }}
             >
-              <h4>Employer Details</h4>
+              <h4>Company Details</h4>
               <p>
-                <strong>Phone:</strong> {employerDetails.phone}
+                <strong>Industry:</strong> {employerDetails.industry}
               </p>
               <p>
-                <strong>Address:</strong> {employerDetails.location}
+                <strong>Location:</strong> {employerDetails.location}
+              </p>
+              <p>
+                <strong>Description:</strong> {employerDetails.description}
+              </p>
+              <h4>Contact Information</h4>
+              <p>
+                <strong>Contact Person:</strong> {employerDetails.contactPerson}
               </p>
               <p>
                 <strong>Email:</strong> {employerDetails.email}
+              </p>
+              <p>
+                <strong>Phone:</strong> {employerDetails.phone}
               </p>
               <div>
                 <strong>Profile:</strong>

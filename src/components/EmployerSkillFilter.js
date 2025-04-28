@@ -14,6 +14,9 @@ const EmployerSkillFilter = () => {
   const [selectedSkills, setSelectedSkills] = useState([]);
   const [filteredApplicants, setFilteredApplicants] = useState([]);
   const [selectedApplicant, setSelectedApplicant] = useState(null);
+  const [filterMode, setFilterMode] = useState("relevancy"); // 'relevancy' or 'absolute'
+  const [modeAnimation, setModeAnimation] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);  // Track modal visibility
 
   const toggleSkill = (skill) => {
     setSelectedSkills((prev) =>
@@ -21,45 +24,77 @@ const EmployerSkillFilter = () => {
     );
   };
 
+  const removeSkill = (skillToRemove) => {
+    setSelectedSkills((prev) => prev.filter((skill) => skill !== skillToRemove));
+  };
+
+  const clearAllSkills = () => {
+    setSelectedSkills([]);
+  };
+
+  const toggleFilterMode = () => {
+    setFilterMode((prev) => (prev === "relevancy" ? "absolute" : "relevancy"));
+    setModeAnimation(true);
+    setTimeout(() => setModeAnimation(false), 500); // Animation lasts 500ms
+  };
+
   useEffect(() => {
     const fetchApplicants = async () => {
       const snapshot = await getDocs(collection(db, "applicants"));
       let filtered = [];
-  
+
       snapshot.forEach((doc) => {
         const data = doc.data();
         if (!data.scoutVisibility) return;
-  
-        const match = selectedSkills.every((skill) => data.skills?.[skill]);
+
+        const applicantSkills = data.selectedJobs || [];
+
+        let match = false;
+        if (filterMode === "absolute") {
+          // Absolute mode: Applicant's skills must match exactly (no extra skills)
+          match = selectedSkills.length === applicantSkills.length &&
+                  selectedSkills.every(skill => applicantSkills.includes(skill));
+        } else {
+          // Relevancy mode: any skill matches
+          match = selectedSkills.some(skill => applicantSkills.includes(skill));
+        }
+
         if (match) {
           filtered.push({ id: doc.id, ...data });
         }
       });
-  
-      // Sort by average descending, but only if the field exists and is a number
+
       filtered.sort((a, b) => parseFloat(b.average || 0) - parseFloat(a.average || 0));
-  
       setFilteredApplicants(filtered);
     };
-  
+
     if (selectedSkills.length > 0) {
       fetchApplicants();
     } else {
       setFilteredApplicants([]);
     }
-  }, [selectedSkills]);
-  
-  
+  }, [selectedSkills, filterMode]);
+
+  const openModal = (applicant) => {
+    setSelectedApplicant(applicant);
+    setModalVisible(true);
+  };
+
+  const closeModal = () => {
+    setSelectedApplicant(null);
+    setModalVisible(false);
+  };
 
   return (
     <div style={{ padding: "100px", maxWidth: "1000px", margin: "auto" }}>
       <h2 style={{ textAlign: "center" }}>Filter Applicants by Skills</h2>
 
+      {/* Skill Options */}
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(3, 1fr)",
         gap: "10px",
-        marginBottom: "30px"
+        marginBottom: "20px"
       }}>
         {skillOptions.map((skill) => (
           <div
@@ -72,7 +107,8 @@ const EmployerSkillFilter = () => {
               cursor: "pointer",
               backgroundColor: selectedSkills.includes(skill) ? "#4ad4d4" : "#fff",
               fontWeight: "600",
-              textAlign: "center"
+              textAlign: "center",
+              transition: "0.3s",
             }}
           >
             {skill}
@@ -80,49 +116,108 @@ const EmployerSkillFilter = () => {
         ))}
       </div>
 
-      <h3>Matching Applicants: {filteredApplicants.length}</h3>
-      <div style={{ display: "grid", gap: "15px" }}>
-        {filteredApplicants.map((applicant) => (
-          <div
-            key={applicant.id}
-            onClick={() => setSelectedApplicant(applicant)}
-            style={{
-              border: "1px solid #ddd",
-              padding: "20px",
-              borderRadius: "10px",
-              backgroundColor: "#f9f9f9",
-              cursor: "pointer"
-            }}
-          >
-            <p><strong>{applicant.name}</strong> — {applicant.experience}</p>
-            <p>{Object.keys(applicant.skills || {}).join(", ")}</p>
+      {/* Selected Skills + Controls */}
+      {selectedSkills.length > 0 && (
+        <div style={{ marginBottom: "30px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h4>Selected Skills:</h4>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={toggleFilterMode}
+                style={{
+                  backgroundColor: "#4ad4d4",
+                  color: "#fff",
+                  border: "none",
+                  padding: "8px 14px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  transform: modeAnimation ? "scale(1.1)" : "scale(1)",
+                  transition: "transform 0.3s ease",
+                }}
+              >
+                Mode: {filterMode === "relevancy" ? "Relevancy" : "Absolute"}
+              </button>
+              <button
+                onClick={clearAllSkills}
+                style={{
+                  backgroundColor: "#ff4d4d",
+                  color: "#fff",
+                  border: "none",
+                  padding: "8px 14px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "bold"
+                }}
+              >
+                Clear All
+              </button>
+            </div>
           </div>
-        ))}
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "10px" }}>
+            {selectedSkills.map((skill) => (
+              <div
+                key={skill}
+                onClick={() => removeSkill(skill)}
+                style={{
+                  backgroundColor: "#4ad4d4",
+                  color: "#fff",
+                  padding: "8px 12px",
+                  borderRadius: "20px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontWeight: "600",
+                  cursor: "pointer"
+                }}
+              >
+                {skill} ✖
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Applicants List */}
+      <h3>Matching Applicants: {filteredApplicants.length}</h3>
+      <div style={{ display: "grid", gap: "15px", marginTop: "20px" }}>
+        {filteredApplicants.length > 0 ? (
+          filteredApplicants.map((applicant) => (
+            <div
+              key={applicant.id}
+              onClick={() => openModal(applicant)}
+              style={{
+                border: "1px solid #ddd",
+                padding: "20px",
+                borderRadius: "10px",
+                backgroundColor: "#f9f9f9",
+                cursor: "pointer",
+                transition: "0.3s ease",
+              }}
+            >
+              <p><strong>{applicant.name}</strong> — {applicant.experience}</p>
+              <p>{(applicant.selectedJobs || []).join(", ")}</p>
+            </div>
+          ))
+        ) : selectedSkills.length > 0 ? (
+          <div style={{
+            textAlign: "center",
+            marginTop: "40px",
+            fontSize: "20px",
+            color: "#000000",
+            animation: "fadeIn 0.5s ease-in-out"
+          }}>
+            🚫 No applicants match your current selection.
+          </div>
+        ) : null}
       </div>
 
-      {/* MODAL */}
-      {selectedApplicant && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          backgroundColor: "rgba(0,0,0,0.5)",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center"
-        }}>
-          <div style={{
-            backgroundColor: "#fff",
-            padding: "30px",
-            borderRadius: "10px",
-            maxWidth: "800px",
-            width: "100%",
-            maxHeight: "90vh",
-            overflowY: "auto"
-          }}>
-            <button onClick={() => setSelectedApplicant(null)} style={{ float: "right", fontSize: "20px" }}>✖</button>
+      {/* Applicant Modal */}
+      {selectedApplicant && modalVisible && (
+        <div className={`modal-overlay ${modalVisible ? 'fadeIn' : ''}`}>
+          <div className="modal-container">
+            <button onClick={closeModal} style={{ float: "right", fontSize: "20px" }}>✖</button>
             <div style={{ display: "flex", gap: "20px", marginTop: "10px" }}>
               <img src={selectedApplicant.profilePicURL} alt="Profile" style={{ width: "120px", borderRadius: "10px" }} />
               <div>
@@ -137,12 +232,9 @@ const EmployerSkillFilter = () => {
             <div style={{ marginTop: "20px" }}>
               <h3>Skills</h3>
               <ul>
-              {Object.keys(selectedApplicant.skills || {})
-                .filter(skill => !["average", "html", "css", "javascript"].includes(skill.toLowerCase()))
-                .map((skill) => (
-                    <li key={skill}>{skill}</li>
+                {(selectedApplicant.selectedJobs || []).map((skill) => (
+                  <li key={skill}>{skill}</li>
                 ))}
-
               </ul>
             </div>
 
@@ -159,6 +251,7 @@ const EmployerSkillFilter = () => {
                 </div>
               ))}
             </div>
+
           </div>
         </div>
       )}
