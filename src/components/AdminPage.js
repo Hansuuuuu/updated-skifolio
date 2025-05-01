@@ -33,6 +33,7 @@ const AdminPage = () => {
   const [emailBody, setEmailBody] = useState("");
   const [recipientType, setRecipientType] = useState(null);
   const [imageFile, setImageFile] = useState(null); // Define the state for the image file
+  const [showDashboard, setShowDashboard] = useState(true); // Show Dashboard by default
 
 
   // const [announcements, setAnnouncements] = useState([]);
@@ -149,41 +150,17 @@ const AdminPage = () => {
 
     fetchPendingJobs();
   }, []);
+
+
   const handleToggleClass = () => {
-    // // Only toggle visibility if selectedUserType is "Applicants" or "Employers"
-    // if (selectedUserType !== "Applicants" || selectedUserType !== "Employers") {
-    //   // Set the selectedUserType to "JobsToBeApproved"
-    //   setSelectedUserType("JobsToBeApproved");
-  
-    // // Find the element with the "JobsToBeApproved" class or ID
-    // const jobsToBeApprovedElement = document.querySelector(".JobsToBeApproved");
-
-
-    //   // Check if the element exists before toggling visibility
-    //   if (jobsToBeApprovedElement) {
-    //     setIsUserClassVisible(true); // Show the JobsToBeApproved content
-    //   }
-    // }
     setIsUserClassVisible(true);
     setUserApproval(false);
     setHistoryVisible(false);
     setShowAnnouncement(false);
   };
+
+
   const handleToggleApproval = () => {
-    // // Only toggle visibility if selectedUserType is "Applicants" or "Employers"
-    // if (selectedUserType !== "Applicants" || selectedUserType !== "Employers") {
-    //   // Set the selectedUserType to "JobsToBeApproved"
-    //   setSelectedUserType("JobsToBeApproved");
-  
-    // // Find the element with the "JobsToBeApproved" class or ID
-    // const jobsToBeApprovedElement = document.querySelector(".JobsToBeApproved");
-
-
-    //   // Check if the element exists before toggling visibility
-    //   if (jobsToBeApprovedElement) {
-    //     setIsUserClassVisible(true); // Show the JobsToBeApproved content
-    //   }
-    // }
     setUserApproval(true);
   };
   // Fetch Users to Approve
@@ -191,6 +168,34 @@ const [usersToApprove, setUsersToApprove] = useState([]);
 const [deletedFiles, setDeletedFiles] = useState([]);
 const [showDeletedFiles, setShowDeletedFiles] = useState(false); // Toggle for deleted files view
 const [announcementVisible, setShowAnnouncement] = useState(false);
+
+
+const [currentDateTime, setCurrentDateTime] = useState(new Date());
+const [hoverTotalUsers, setHoverTotalUsers] = useState(false);
+
+
+useEffect(() => {
+  const interval = setInterval(() => {
+    setCurrentDateTime(new Date());
+  }, 1000); // update every second
+
+
+  return () => clearInterval(interval); // clean up  
+},[]);
+
+
+{/** Dashboard Card*/}
+const cardStyle = {
+  backgroundColor: "#fff",
+  padding: "20px",
+  borderRadius: "8px",
+  boxShadow: "0 2px 5px rgba(0, 0, 0, 0.1)",
+  textAlign: "center",
+  minWidth: "200px",
+  flex: "1",
+  transition: "transform 0.2s",
+  cursor: "pointer",
+};
 
 
 useEffect(() => {
@@ -486,7 +491,8 @@ const handleRejectUser = async (user) => {
 
 
   
-  const handleAnnouncementSend = async () => {
+  const handleAnnouncementSend = async (e) => {
+    e.preventDefault();
     if (!emailSubject || !emailBody || !recipientType) {
       console.error("Missing required data (subject, body, or recipient type).");
       alert("Please fill out all fields and select a recipient type.");
@@ -502,6 +508,11 @@ const handleRejectUser = async (user) => {
         imageUrl = await getDownloadURL(storageRef);
         console.log('Image URL:', imageUrl);
       }
+
+
+      const recipientTypesToSend = recipientType === "both" 
+      ? ["applicant", "employer"] 
+      : [recipientType];
   
       const emailContent = `
         <p>${emailBody}</p>
@@ -511,26 +522,27 @@ const handleRejectUser = async (user) => {
       const notificationsRef = collection(db, "announcement");
       const timestamp = Date.now();
   
-      const newNotification = {
-        subject: emailSubject,
-        message: emailContent,
-        timestamp: new Date(),
-        recipientType: recipientType, // "applicant" or "employer"
-        status: "unread",
-        imageUrl: imageUrl || null,
-        // Optionally include recipient IDs if needed
-        // recipients: (recipientType === "applicant" ? applicants : employers).map(user => user.id),
-      };
-  
-      const docId = `${recipientType}_${timestamp}`;
-      await setDoc(doc(notificationsRef, docId), newNotification);
-  
+      for (const type of recipientTypesToSend) {
+        const newNotification = {
+          subject: emailSubject,
+          message: emailContent,
+          timestamp: new Date(),
+          recipientType: type, // "applicant" or "employer"
+          status: "unread",
+          imageUrl: imageUrl || null,
+          // Optionally include recipient IDs if needed
+          // recipients: (recipientType === "applicant" ? applicants : employers).map(user => user.id),
+        };
+    
+        const docId = `${type}_${timestamp}`;
+        await setDoc(doc(notificationsRef, docId), newNotification);
+      }
       alert("Announcement sent successfully!");
   
       setEmailSubject("");
       setEmailBody("");
       setImageFile(null);
-      setShowAnnouncement(false);
+      setRecipientType(null);
     } catch (error) {
       console.error("Error sending notification:", error);
       alert("Failed to send announcement.");
@@ -626,7 +638,6 @@ const handleRejectUser = async (user) => {
   }
   return (
     <><div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
-      <h2>Admin Page</h2>
 
 
       <button
@@ -655,162 +666,299 @@ const handleRejectUser = async (user) => {
     </button>
 
 
-      {/* User Type Toggle */}
-      <div style={{ marginBottom: "20px" }}>
-        <button
-         onClick={() => {
-            setSelectedUserType("Applicants");
-            setIsUserClassVisible(false);
-            setUserApproval(false);
-            setShowDeletedFiles(false);
-            setHistoryVisible(false);
-            setShowAnnouncement(false);
-          }}
-          
-          style={{
-            marginRight: "10px",
-            padding: "10px 15px",
-            backgroundColor: selectedUserType === "Applicants" && !isUserClassVisible ? "#007bff" : "#ddd",
-            color: "#fff",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          View Applicants
-        </button>
-        <button
-          onClick={() => {
-            setSelectedUserType("Employers");
-            setIsUserClassVisible(false);
-            setUserApproval(false);
-            setShowDeletedFiles(false);
-            setHistoryVisible(false);
-            setShowAnnouncement(false);
-        }}
-          style={{
-            padding: "10px 15px",
-            backgroundColor: selectedUserType === "Employers" && !isUserClassVisible ? "#007bff" : "#ddd",
-            color: "#fff",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          View Employers
-        </button>
-        <button
-          onClick={handleToggleClass}  
-            style={{
-              marginLeft:"10px",
-              marginRight: "10px",
-              padding: "10px 15px",
-              backgroundColor: isUserClassVisible && !isUserApproval && !historyVisible ? "#007bff" : "#ddd",
-              color: "#fff",
-              border: "none",
-              borderRadius: "5px",
-              cursor: "pointer",
-           }}      
-          >
-          Jobs to Be Approved
-        </button>
-        <button
-          onClick={() => {
-            setUserApproval(true);
-            setShowDeletedFiles(false); 
-            setIsUserClassVisible(false);
-            setSelectedUserType(false);
-            setHistoryVisible(false);
-            setShowAnnouncement(false);
-        }}
-          style={{
-            marginRight: "10px" , 
-            padding: "10px 15px",
-            backgroundColor: isUserApproval && !historyVisible ? "#007bff" : "#ddd",
-            color: "#fff",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-        }}
-        >
-          View User Accounts ({usersToApprove.length || 0} Waiting)
-        </button>
+    {/* User Type Toggle*/}
+    <div style={{ display: "flex" }}>
+      {/* Side Navigation */}
+      <div style={{
+        width: "240px",
+        background: "linear-gradient(to bottom, #66e0c8, #1ac7b3)",
+        color: "#004d4d",
+        padding: "20px",
+        height: "100vh",
+        borderRight: "1px solid #ddd",
+        boxSizing: "border-box",
+        position: "fixed",
+        top: 0,
+        left: 0
+      }}>
+    <h2 style={{ marginBottom: "20px", fontFamily: "Arial, sans-serif" }}>Admin Page</h2>
 
 
-        <button
-          onClick={() => {
-            setShowDeletedFiles(true);
-            setUserApproval(false); 
-            setIsUserClassVisible(false);
-            setSelectedUserType("");
-            setHistoryVisible(false);
-            setShowAnnouncement(false);
-        }}
-          style={{
-            padding: "10px 15px",
-            backgroundColor: showDeletedFiles ? "#007bff" : "#ddd",
-            color: "#fff",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-        }}
-        >
-          View Deleted Files
-        </button>
+    <button
+      onClick={() => {
+        setShowDashboard(true);
+        setSelectedUserType("");
+        setIsUserClassVisible(false);
+        setUserApproval(false);
+        setShowDeletedFiles(false);
+        setHistoryVisible(false);
+        setShowAnnouncement(false);
+      }}
+      style={{
+        display: "block",
+        width: "100%",
+        marginBottom: "10px",
+        padding: "10px",
+        backgroundColor: showDashboard ? "#007bff" : "#ddd",
+        color: "#fff",
+        border: "none",
+        borderRadius: "5px",
+        cursor: "pointer",
+      }}
+    >
+      Dashboard
+    </button>
 
 
-        {/* History Button */}
-        {/* <button
-          onClick={() => {
-            setHistoryVisible(true);
-            setShowDeletedFiles(false);
-            setUserApproval(false); 
-            setIsUserClassVisible(false);
-            setSelectedUserType("");
-            setShowAnnouncement(false);
-          }}
-          style={{
-            marginLeft: "10px",
-            padding: "10px 15px",
-            backgroundColor: historyVisible ? "#007bff" : "#ddd", // green color for history
-            color: "#fff",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          History
-        </button> */}
+    <button
+      onClick={() => {
+        setSelectedUserType("Applicants");
+        setShowDashboard(false);
+        setIsUserClassVisible(false);
+        setUserApproval(false);
+        setShowDeletedFiles(false);
+        setHistoryVisible(false);
+        setShowAnnouncement(false);
+      }}
+      style={{
+        display: "block",
+        width: "100%",
+        marginBottom: "10px",
+        padding: "10px",
+        backgroundColor: selectedUserType === "Applicants" && !isUserClassVisible ? "#007bff" : "#ddd",
+        color: "#fff",
+        border: "none",
+        borderRadius: "5px",
+        cursor: "pointer",
+      }}
+    >
+      View Applicants
+    </button>
 
 
-        {/* Announcement Button */}
-        <button
-          onClick={() => {
-            setShowAnnouncement(true);
-            setHistoryVisible(false);
-            setShowDeletedFiles(false);
-            setUserApproval(false); 
-            setIsUserClassVisible(false);
-            setSelectedUserType("");
-          }}
-          style={{
-            marginLeft: "10px",
-            padding: "10px 15px",
-            backgroundColor: announcementVisible ? "#007bff" : "#ddd", // green color for history
-            color: "#fff",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          Announcement
-        </button>
-    </div>
+    <button
+      onClick={() => {
+        setSelectedUserType("Employers");
+        setShowDashboard(false);
+        setIsUserClassVisible(false);
+        setUserApproval(false);
+        setShowDeletedFiles(false);
+        setHistoryVisible(false);
+        setShowAnnouncement(false);
+      }}
+      style={{
+        display: "block",
+        width: "100%",
+        marginBottom: "10px",
+        padding: "10px",
+        backgroundColor: selectedUserType === "Employers" && !isUserClassVisible ? "#007bff" : "#ddd",
+        color: "#fff",
+        border: "none",
+        borderRadius: "5px",
+        cursor: "pointer",
+      }}
+    >
+      View Employers
+    </button>
+
+
+    <button
+      onClick={handleToggleClass}
+      style={{
+        display: "block",
+        width: "100%",
+        marginBottom: "10px",
+        padding: "10px",
+        backgroundColor: isUserClassVisible && !isUserApproval && !historyVisible ? "#007bff" : "#ddd",
+        color: "#fff",
+        border: "none",
+        borderRadius: "5px",
+        cursor: "pointer",
+      }}
+    >
+      Jobs to Be Approved
+    </button>
+
+
+    <button
+      onClick={() => {
+        setUserApproval(true);
+        setShowDashboard(false);
+        setShowDeletedFiles(false);
+        setIsUserClassVisible(false);
+        setSelectedUserType(false);
+        setHistoryVisible(false);
+        setShowAnnouncement(false);
+      }}
+      style={{
+        display: "block",
+        width: "100%",
+        marginBottom: "10px",
+        padding: "10px",
+        backgroundColor: isUserApproval && !historyVisible ? "#007bff" : "#ddd",
+        color: "#fff",
+        border: "none",
+        borderRadius: "5px",
+        cursor: "pointer",
+      }}
+    >
+      View User Accounts ({usersToApprove.length || 0} Waiting)
+    </button>
+
+
+    <button
+      onClick={() => {
+        setShowDeletedFiles(true);
+        setShowDashboard(false);
+        setUserApproval(false);
+        setIsUserClassVisible(false);
+        setSelectedUserType("");
+        setHistoryVisible(false);
+        setShowAnnouncement(false);
+      }}
+      style={{
+        display: "block",
+        width: "100%",
+        marginBottom: "10px",
+        padding: "10px",
+        backgroundColor: showDeletedFiles ? "#007bff" : "#ddd",
+        color: "#fff",
+        border: "none",
+        borderRadius: "5px",
+        cursor: "pointer",
+      }}
+    >
+      View Deleted Files
+    </button>
+
+
+    {/* Uncomment if History is needed */}
+    {/* <button
+      onClick={() => {
+        setHistoryVisible(true);
+        setShowDashboard(false);
+        setShowDeletedFiles(false);
+        setUserApproval(false);
+        setIsUserClassVisible(false);
+        setSelectedUserType("");
+        setShowAnnouncement(false);
+      }}
+      style={{
+        display: "block",
+        width: "100%",
+        marginBottom: "10px",
+        padding: "10px",
+        backgroundColor: historyVisible ? "#007bff" : "#ddd",
+        color: "#fff",
+        border: "none",
+        borderRadius: "5px",
+        cursor: "pointer",
+      }}
+    >
+      History
+    </button> */}
+
+
+    <button
+      onClick={() => {
+        setShowAnnouncement(true);
+        setShowDashboard(false);
+        setHistoryVisible(false);
+        setShowDeletedFiles(false);
+        setUserApproval(false);
+        setIsUserClassVisible(false);
+        setSelectedUserType("");
+      }}
+      style={{
+        display: "block",
+        width: "100%",
+        marginBottom: "10px",
+        padding: "10px",
+        backgroundColor: announcementVisible ? "#007bff" : "#ddd",
+        color: "#fff",
+        border: "none",
+        borderRadius: "5px",
+        cursor: "pointer",
+      }}
+    >
+      Announcement
+    </button>
+  </div>
+
+
+  {/* Main Content */}
+  <div style={{ 
+    flexGrow: 1, 
+    padding: "20px",  
+    marginLeft: "240px", 
+    marginTop: "20px",
+    width: "100%", 
+    boxSizing: "border-box"
+    }}>
+    {/* All your tables and views go here */}
+
+
+    {showDashboard && (
+      <div>
+        <h2 style={{ fontFamily: "Arial, sans-serif" }}>Dashboard</h2>
+        <p style={{ color: "#555", marginBottom: "30px" }}>
+        {currentDateTime.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric"
+        })},{" "}
+        {currentDateTime.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit"
+        })} </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", marginTop: "20px" }}>
+          <div style={{...cardStyle, position: "relative"}}
+            onMouseEnter={() => setHoverTotalUsers(true)}
+            onMouseLeave={() => setHoverTotalUsers(false)}>
+            <h3>Total Users</h3>
+            <p>{(applicants.length || 0) + (employers.length || 0)}</p>
+              {hoverTotalUsers && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: "0",
+                    backgroundColor: "#f9f9f9",
+                    border: "1px solid #ccc",
+                    borderRadius: "5px",
+                    padding: "10px",
+                    marginTop: "5px",
+                    boxShadow: "0px 2px 8px rgba(0,0,0,0.1)",
+                    zIndex: 1
+                  }}
+                >
+                  <p style={{ margin: 0 }}>Applicants: {applicants.length || 0}</p>
+                  <p style={{ margin: 0 }}>Employers: {employers.length || 0}</p>
+                </div>
+              )}
+          </div>
+          <div style={cardStyle}>
+            <h3>Jobs To Be Approved</h3>
+            <p>{pendingJobs.length || 0}</p>
+          </div>
+          <div style={cardStyle}>
+            <h3>Total Job Posts</h3>
+            <p>{jobs.length || 0}</p>
+          </div>
+          <div style={cardStyle}>
+            <h3>Pending Accounts</h3>
+            <p>{usersToApprove.length || 0}</p>
+          </div>
+        </div>
+      </div>
+    )}
 
 
       {/* User Table */}
-      {!isUserClassVisible && !isUserApproval && !showDeletedFiles && !historyVisible && !announcementVisible &&(
-      <div className="user" style={{ border: "1px solid #ddd", borderRadius: "5px", padding: "20px" }}>
+      {!isUserClassVisible && !isUserApproval && !showDashboard && !showDeletedFiles && !historyVisible && !announcementVisible && (
+        <div className="user" style={{ border: "1px solid #ddd", borderRadius: "5px", padding: "20px" }}>
         <h3>{selectedUserType}</h3>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -818,39 +966,84 @@ const handleRejectUser = async (user) => {
               <th style={{ border: "1px solid #ddd", padding: "10px" }}>
                 {selectedUserType === "Applicants" ? "Name" : "Company Name"}
               </th>
-              <th style={{ border: "1px solid #ddd", padding: "10px" }}>Email</th>
+              <th style={{ border: "1px solid #ddd", padding: "10px" }}>
+                {selectedUserType === "Applicants" ? "GitHub Repo" : "Company Website"}
+              </th>
               <th style={{ border: "1px solid #ddd", padding: "10px" }}>Details</th>
             </tr>
           </thead>
           <tbody>
-            {(selectedUserType === "Applicants" ? applicants : employers).map((user) => (
-              <tr key={user.id || user.userId}>
-                <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                  {user.name || user.companyName}
-                </td>
-                <td style={{ border: "1px solid #ddd", padding: "10px" }}>{user.email}</td>
-                <td style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
-                  <button
-                    onClick={() => handleUserClick(user)}
-                    style={{
-                      padding: "5px 10px",
-                      backgroundColor: "#007bff",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "3px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    View
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            {selectedUserType === "Applicants" &&
+              applicants.map((applicant) => (
+                <tr key={applicant.id || applicant.userId}>
+                  <td style={{ border: "1px solid #ddd", padding: "10px" }}>{applicant.name}</td>
+                  <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                    <a
+                      href={applicant.githubRepo}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#007bff", textDecoration: "none" }}
+                    >
+                      {applicant.githubRepo}
+                    </a>
+                  </td>
+                  <td style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
+                    <button
+                      onClick={() => handleUserClick(applicant)}
+                      style={{
+                        padding: "5px 10px",
+                        backgroundColor: "#007bff",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "3px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
+
+
+            {selectedUserType === "Employers" &&
+              employers.map((employer) => (
+                <tr key={employer.id || employer.userId}>
+                  <td style={{ border: "1px solid #ddd", padding: "10px" }}>{employer.companyName}</td>
+                  <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                    <a
+                      href={employer.companyWebsite}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#007bff", textDecoration: "none" }}
+                    >
+                      {employer.companyWebsite}
+                    </a>
+                  </td>
+                  <td style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
+                    <button
+                      onClick={() => handleUserClick(employer)}
+                      style={{
+                        padding: "5px 10px",
+                        backgroundColor: "#007bff",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "3px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      View
+                    </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {/* Detailed Applicant Modal */}
+
+
       {selectedUser && (
         <div
           style={{
@@ -1102,8 +1295,8 @@ const handleRejectUser = async (user) => {
           </div>
         </div>
       )}
-    </div>
-    {(isUserClassVisible == true) && !selectedUser &&(
+    
+    {(isUserClassVisible == true) && !selectedUser && !showDashboard && !showDeletedFiles && !announcementVisible && !historyVisible &&(
         <div  style={{ border: "1px solid #ddd", borderRadius: "5px", padding: "20px", fontFamily: "Arial, sans-serif" }}>
           <h3>Jobs to Be Approved</h3>
 
@@ -1241,7 +1434,7 @@ const handleRejectUser = async (user) => {
 
 
       {/* View User Acconts To Be Approve Section */}
-      {!showDeletedFiles && !isUserClassVisible && !selectedUserType && !historyVisible && !announcementVisible &&(
+      {!showDeletedFiles && !isUserClassVisible && !selectedUserType && !showDashboard && !historyVisible && !announcementVisible &&(
         <div  style={{ border: "1px solid #ddd", borderRadius: "5px", padding: "20px", fontFamily: "Arial, sans-serif" }}>
             <h3>Users Pending Approval</h3>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1296,7 +1489,7 @@ const handleRejectUser = async (user) => {
         </div>
     )}
     {/* Archives Section */}
-    {showDeletedFiles && !selectedUserType && !isUserClassVisible && !historyVisible && !announcementVisible &&(
+    {showDeletedFiles && !selectedUserType && !isUserClassVisible && !showDashboard && !historyVisible && !announcementVisible &&(
         <div  style={{ border: "1px solid #ddd", borderRadius: "5px", padding: "20px", fontFamily: "Arial, sans-serif" }}>
             <h3>Deleted Files</h3>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1323,7 +1516,7 @@ const handleRejectUser = async (user) => {
     )}
 
 
-{/* {historyVisible && !isUserApproval && !showDeletedFiles && !selectedUserType && !isUserClassVisible && !announcementVisible && (
+{/* {historyVisible && !isUserApproval && !showDeletedFiles && !selectedUserType && !isUserClassVisible && !announcementVisible && !showDashboard && (
         <div style={{  border: "1px solid #ddd", borderRadius: "5px", padding: "20px" }}>
           <h3>History</h3>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1349,7 +1542,7 @@ const handleRejectUser = async (user) => {
 
 
       {/* Announcement tab */}
-      {announcementVisible && !historyVisible && !isUserApproval && !showDeletedFiles && !selectedUserType && !isUserClassVisible && (
+      {announcementVisible && !showDashboard && !historyVisible && !isUserApproval && !showDeletedFiles && !selectedUserType && !isUserClassVisible && (
         <div
           style={{
             marginTop: "20px",
@@ -1425,13 +1618,14 @@ const handleRejectUser = async (user) => {
                 <option value="">Select Recipient</option>
                 <option value="applicant">Applicant</option>
                 <option value="employer">Employer</option>
+                <option value="both">All</option>
               </select>
             </label>
           </div>
 
 
           <button
-            onClick={handleAnnouncementSend}
+            onClick={ (e) => handleAnnouncementSend(e)}
             style={{
               marginTop: "20px",
               padding: "10px 20px",
@@ -1446,7 +1640,11 @@ const handleRejectUser = async (user) => {
           </button>
         </div>
       )}
+      </div>
+</div>
 
+
+</div>
 
 
     </>
@@ -1455,3 +1653,9 @@ const handleRejectUser = async (user) => {
 
 
 export default AdminPage;
+
+
+
+
+
+

@@ -1005,6 +1005,201 @@
 
 // export default NotificationPanel;
 
+// import React, { useState, useEffect } from "react";
+// import { db, auth } from "../firebase";
+// import { collection, getDocs, doc, query, updateDoc,getDoc } from "firebase/firestore";
+// import "bootstrap/dist/css/bootstrap.min.css";
+// import "../styles.css";
+
+
+// const NotificationPanel = () => {
+//   const [notifications, setNotifications] = useState({
+//     news: [],
+//     application: [],
+//   });
+//   const [activeTab, setActiveTab] = useState("news");
+//   const [expandedNotif, setExpandedNotif] = useState(null);
+//   const [userType, setUserType] = useState(null); // New state to track user role
+
+//   useEffect(() => {
+//     const fetchNotifications = async () => {
+//       if (!auth.currentUser) return;
+  
+//       try {
+//         const uid = auth.currentUser.uid;
+//         const applicantDoc = doc(db, "applicants", uid);
+//         const employerDoc = doc(db, "employers", uid);
+  
+//         const employerDocSnap = await getDoc(employerDoc);
+//         const isEmployer = employerDocSnap.exists();
+//         setUserType(isEmployer ? "employer" : "applicant");
+  
+//         const notificationSnap = await getDocs(
+//           collection(isEmployer ? employerDoc : applicantDoc, "notifications")
+//         );
+//         const applicationNotifications = notificationSnap.docs.map((doc) => ({
+//           id: doc.id,
+//           ...doc.data(),
+//         }));
+  
+//         // Get all announcements
+//         const announcementSnapshot = await getDocs(collection(db, "announcement"));
+//         const allAnnouncements = announcementSnapshot.docs.map((doc) => ({
+//           id: doc.id,
+//           ...doc.data(),
+//           status: doc.data().status || "unread", // default in case missing
+//         }));
+  
+//         // ✅ Only keep announcements for the current user type
+//         const relevantAnnouncements = allAnnouncements.filter(
+//           (doc) => doc.recipientType === (isEmployer ? "employer" : "applicant")
+//         );
+  
+//         // Set notifications
+//         setNotifications({
+//           application: applicationNotifications.sort(
+//             (a, b) => b.timestamp?.toDate() - a.timestamp?.toDate()
+//           ),
+//           news: relevantAnnouncements.sort(
+//             (a, b) => b.timestamp?.toDate() - a.timestamp?.toDate()
+//           ),
+//         });
+//       } catch (error) {
+//         console.error("Error fetching notifications:", error);
+//       }
+//     };
+  
+//     fetchNotifications();
+//   }, []);
+  
+
+//   const handleNotificationClick = async (notif) => {
+//     if (!auth.currentUser) return;
+
+//     try {
+//       let notifDocRef;
+//       const tabKey = notif.recipientType ? "news" : "application";
+
+//       if (notif.recipientType) {
+//         notifDocRef = doc(db, "announcement", notif.id);
+//       } else {
+//         const path = userType === "employer" ? "employers" : "applicants";
+//         notifDocRef = doc(db, path, auth.currentUser.uid, "notifications", notif.id);
+//       }
+
+//       await updateDoc(notifDocRef, { status: "read" });
+//       setExpandedNotif(expandedNotif === notif.id ? null : notif.id);
+
+//       setNotifications((prev) => ({
+//         ...prev,
+//         [tabKey]: prev[tabKey].map((n) =>
+//           n.id === notif.id ? { ...n, status: "read" } : n
+//         ),
+//       }));
+//     } catch (error) {
+//       console.error("Error updating notification status:", error);
+//     }
+//   };
+ 
+//   return (
+//     <div className="notification-page">
+//       <div className="notification-top">
+//         <h2 style={{ margin: "25px" }}>Notifications</h2>
+
+//         <div className="tabs">
+//           {Object.keys(notifications).map((tab) => (
+//             <button
+//               key={tab}
+//               className={`tab-button ${activeTab === tab ? "active" : ""}`}
+//               onClick={() => setActiveTab(tab)}
+//             >
+//               {tab.charAt(0).toUpperCase() + tab.slice(1)}
+//             </button>
+//           ))}
+//         </div>
+
+//         <div className="notification-content">
+//           <ul>
+//             {notifications[activeTab].length > 0 ? (
+//               <>
+//                 {/* Personal Notifications */}
+//                 {notifications[activeTab].some((notif) => !notif.recipientType) && (
+//                   <>
+//                     <li className="notif-section-title">📬 Your Notifications</li>
+//                     {notifications[activeTab]
+//                       .filter((notif) => !notif.recipientType)
+//                       .map((notif) => (
+//                         <li
+//                           key={notif.id}
+//                           className={`notification-item ${notif.status === "unread" ? "unread" : "read"}`}
+//                           onClick={() => handleNotificationClick(notif)}
+//                         >
+//                           <div className="notif-header">
+//                             <strong>{notif.companyName || "System"}</strong>
+//                             {notif.status === "unread" && (
+//                               <span className="badge">New 🔥</span>
+//                             )}
+//                           </div>
+
+//                           {expandedNotif === notif.id && (
+//                             <div className="notif-details">
+//                               <p><strong>Subject:</strong> {notif.subject}</p>
+//                               <p>{notif.message}</p>
+//                               <p className="timestamp">
+//                                 <strong>Received:</strong> {notif.timestamp?.toDate().toLocaleString()}
+//                               </p>
+//                             </div>
+//                           )}
+//                         </li>
+//                       ))}
+//                   </>
+//                 )}
+
+//                 {/* Announcements */}
+//                 {notifications[activeTab].some((notif) => notif.recipientType) && (
+//                   <>
+//                     <li className="notif-section-title">📢 Announcements from Admin</li>
+//                     {notifications[activeTab]
+//                       .filter((notif) => notif.recipientType)
+//                       .map((notif) => (
+//                         <li
+//                           key={notif.id}
+//                           className={`notification-item ${notif.status === "unread" ? "unread" : "read"}`}
+//                           onClick={() => handleNotificationClick(notif)}
+//                         >
+//                           <div className="notif-header">
+//                             <strong>Admin</strong>
+//                             {notif.status === "unread" && (
+//                               <span className="badge">New 📣</span>
+//                             )}
+//                           </div>
+
+//                           {expandedNotif === notif.id && (
+//                             <div className="notif-details">
+//                               <p><strong>Subject:</strong> {notif.subject}</p>
+//                               <p dangerouslySetInnerHTML={{ __html: notif.message }} />
+//                               <p className="timestamp">
+//                                 <strong>Posted:</strong> {notif.timestamp?.toDate().toLocaleString()}
+//                               </p>
+//                             </div>
+//                           )}
+//                         </li>
+//                       ))}
+//                   </>
+//                 )}
+//               </>
+//             ) : (
+//               <li className="empty">No new notifications.</li>
+//             )}
+//           </ul>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default NotificationPanel;
+
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
 import { collection, getDocs, doc, query, updateDoc,getDoc } from "firebase/firestore";
@@ -1020,6 +1215,16 @@ const NotificationPanel = () => {
   const [activeTab, setActiveTab] = useState("news");
   const [expandedNotif, setExpandedNotif] = useState(null);
   const [userType, setUserType] = useState(null); // New state to track user role
+  const [visibleCount, setVisibleCount] = useState(10); //New state to limit visible notif 
+
+
+  useEffect(() => {
+    setVisibleCount(10);
+  }, [activeTab]);
+
+
+  const slicedNotifications = notifications[activeTab].slice(0, visibleCount);
+
 
   useEffect(() => {
     const fetchNotifications = async () => {
@@ -1073,12 +1278,15 @@ const NotificationPanel = () => {
   }, []);
   
 
+
   const handleNotificationClick = async (notif) => {
     if (!auth.currentUser) return;
+
 
     try {
       let notifDocRef;
       const tabKey = notif.recipientType ? "news" : "application";
+
 
       if (notif.recipientType) {
         notifDocRef = doc(db, "announcement", notif.id);
@@ -1087,8 +1295,10 @@ const NotificationPanel = () => {
         notifDocRef = doc(db, path, auth.currentUser.uid, "notifications", notif.id);
       }
 
+
       await updateDoc(notifDocRef, { status: "read" });
       setExpandedNotif(expandedNotif === notif.id ? null : notif.id);
+
 
       setNotifications((prev) => ({
         ...prev,
@@ -1106,6 +1316,7 @@ const NotificationPanel = () => {
       <div className="notification-top">
         <h2 style={{ margin: "25px" }}>Notifications</h2>
 
+
         <div className="tabs">
           {Object.keys(notifications).map((tab) => (
             <button
@@ -1118,16 +1329,18 @@ const NotificationPanel = () => {
           ))}
         </div>
 
+
         <div className="notification-content">
           <ul>
             {notifications[activeTab].length > 0 ? (
               <>
                 {/* Personal Notifications */}
-                {notifications[activeTab].some((notif) => !notif.recipientType) && (
+                {slicedNotifications.some((notif) => !notif.recipientType) && (
                   <>
                     <li className="notif-section-title">📬 Your Notifications</li>
                     {notifications[activeTab]
                       .filter((notif) => !notif.recipientType)
+                      .slice(0, visibleCount)
                       .map((notif) => (
                         <li
                           key={notif.id}
@@ -1141,6 +1354,7 @@ const NotificationPanel = () => {
                             )}
                           </div>
 
+
                           {expandedNotif === notif.id && (
                             <div className="notif-details">
                               <p><strong>Subject:</strong> {notif.subject}</p>
@@ -1152,15 +1366,22 @@ const NotificationPanel = () => {
                           )}
                         </li>
                       ))}
+                      {notifications[activeTab].length > visibleCount && (
+                        <button className="see-more-btn" onClick={() => setVisibleCount(notifications[activeTab].length)}>
+                          See More
+                        </button>
+                      )}
                   </>
                 )}
 
+
                 {/* Announcements */}
-                {notifications[activeTab].some((notif) => notif.recipientType) && (
+                {slicedNotifications.some((notif) => notif.recipientType) && (
                   <>
                     <li className="notif-section-title">📢 Announcements from Admin</li>
                     {notifications[activeTab]
                       .filter((notif) => notif.recipientType)
+                      .slice(0, visibleCount)
                       .map((notif) => (
                         <li
                           key={notif.id}
@@ -1174,6 +1395,7 @@ const NotificationPanel = () => {
                             )}
                           </div>
 
+
                           {expandedNotif === notif.id && (
                             <div className="notif-details">
                               <p><strong>Subject:</strong> {notif.subject}</p>
@@ -1185,6 +1407,11 @@ const NotificationPanel = () => {
                           )}
                         </li>
                       ))}
+                      {notifications[activeTab].length > visibleCount && (
+                        <button className="see-more-btn" onClick={() => setVisibleCount(notifications[activeTab].length)}>
+                          See More
+                        </button>
+                      )}
                   </>
                 )}
               </>
@@ -1198,4 +1425,8 @@ const NotificationPanel = () => {
   );
 };
 
+
 export default NotificationPanel;
+
+
+
