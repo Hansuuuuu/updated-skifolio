@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { db, storage } from "../firebase";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection,collectionGroup, getDocs, getDoc, query, where } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import emailjs from "emailjs-com"; // or "@emailjs/browser" depending on your setup
+
+
+
 import {
   deleteDoc,
   doc,
@@ -34,8 +38,8 @@ const AdminPage = () => {
   const [recipientType, setRecipientType] = useState(null);
   const [imageFile, setImageFile] = useState(null); // Define the state for the image file
   const [showDashboard, setShowDashboard] = useState(true); // Show Dashboard by default
-
-
+  const [hiredJobData, setHiredJobData] = useState([]);
+  const [showhired, showHiredJobData] = useState(false);
   // const [announcements, setAnnouncements] = useState([]);
   // const [newAnnouncement, setNewAnnouncement] = useState('');
     const [activeTab, setActiveTab] = useState('manageUsers');
@@ -132,6 +136,56 @@ const AdminPage = () => {
 
 
     fetchApplicants();
+  }, []);
+
+
+  useEffect(() => {
+    const fetchHiredApplicants = async () => {
+      try {
+        const employerSnapshot = await getDocs(collection(db, "employers"));
+        const employerData = await Promise.all(
+          employerSnapshot.docs.map(async (doc) => {
+            const userId = doc.id;
+            const employerData = doc.data();
+
+
+            // Fetch submissions
+            const hiredRef = collection(db, "employers", userId, "hired");
+            const hiredSnapshot = await getDocs(hiredRef);
+            const hired = hiredSnapshot.docs.map((subDoc) => subDoc.data());
+            
+            return {
+              ...employerData,
+              userId,
+              hired,
+            };
+          })
+        );
+        setApplicants(employerData);
+      } catch (error) {
+        console.error("Error fetching applicants:", error);
+      }
+    };
+
+
+    fetchHiredApplicants();
+  }, []);
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        const jobsSnapshot = await getDocs(collection(db, "jobs"));
+        const allJobs = jobsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setJobs(allJobs);
+        console.log("Fetched all jobs:", allJobs.length); // Debugging
+      } catch (error) {
+        console.error("Error fetching all jobs:", error);
+      }
+    };
+
+    fetchJobs(); // Call the function
   }, []);
   useEffect(() => {
     const fetchPendingJobs = async () => {
@@ -273,57 +327,75 @@ if (historyVisible) fetchHistoryData();
 
 // Approve User
 const handleApproveUser = async (user) => {
-    try {
-      const nodemailer = require('nodemailer');
- 
-      // Create a transporter object using SendLayer's SMTP server
-      var transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: 'dumaccno8@gmail.com',
-          pass: 'Legend65'
-        }
-      });
-      
-      var mailOptions = {
-        from: 'no-reply@gmail.com',
-        to: (user.email),
-        subject: 'Account Creation',
-        text: 'ACCOUNT WAS APPROVE AND CAN BE USED NOW! \n Welcome to SKI-FOLIO! \n Happy Job Hunting!'
-      };
-       
-      // Send email
-      transporter.sendMail(mailOptions, (error, info) => {
-            if (error) {
-                 console.error('Error sending email:', error);
-            } else {
-                 console.log('Email sent:', info.response);
-            }
-         }
-      );
-        const targetCollection = user.type === "applicant" ? "applicants" : "employers";
+  
+  try {
+    console.log("handleApproveUser received user:", user);
+console.log("Email:", user.email);
 
+    // Prepare email template parameters
+    emailjs.init("bWFWZMuU0I3Ok35gl"); // Replace with your actual EmailJS public key
+    const templateParams = {
+      email: user.email,
+      html: `
+        <div style="font-family: system-ui, sans-serif, Arial; font-size: 16px; background-color: #fff8f1">
+          <div style="max-width: 600px; margin: auto; padding: 16px">
+            <p>Welcome to the Ski-Folio family! We're excited to have you on board.</p>
+            <p>
+              Your account has been successfully created, and you're now ready to explore all the great
+              features we offer.
+            </p>
+            <p>
+              <a
+                style="
+                  display: inline-block;
+                  text-decoration: none;
+                  outline: none;
+                  color: #fff;
+                  background-color: #fc0038;
+                  padding: 8px 16px;
+                  border-radius: 4px;
+                "
+                href="https://ski-folio.netlify.app"
+                target="_blank"
+              >
+                Open Ski-folio
+              </a>
+            </p>
+            <p>Best regards,<br />The Ski-Folio Team</p>
+          </div>
+        </div>
+      `
+    };
 
-        // Add user to the target collection
-        await setDoc(doc(db, targetCollection, user.id), { ...user, status: "approved" });
+    // Send the email using EmailJS
+    const response = await emailjs.send(
+      "service_mu4w5ko", // Your EmailJS service ID
+      "template_g72ruh8", // Your EmailJS template ID
+      templateParams
+    );
 
+    console.log("Email sent:", response.status, response.text);
 
-        // Remove user from the approval collection
-        await deleteDoc(doc(db, "userAccountsToBeApproved", user.id));
+    // Determine target Firestore collection
+    const targetCollection = user.type === "applicant" ? "applicants" : "employers";
 
+    // Add user to the approved collection with updated status
+    await setDoc(doc(db, targetCollection, user.id), { ...user, status: "approved" });
 
-        // Update local state
-        setUsersToApprove(usersToApprove.filter((u) => u.id !== user.id));
-        alert("User approved successfully.");
+    // Remove user from pending approval collection
+    await deleteDoc(doc(db, "userAccountsToBeApproved", user.id));
 
+    // Update local state
+    setUsersToApprove((prev) => prev.filter((u) => u.id !== user.id));
 
-        await addHistoryRecord('User Approved', `User ${user.id} approved.`); // Add history record with timestamp
+    // Log action in history
+    await addHistoryRecord("User Approved", `User ${user.id} approved.`);
 
-
-    } catch (error) {
-        console.error("Error approving user:", error);
-        alert("Failed to approve user. Please try again.");
-    }
+    alert("User approved successfully.");
+  } catch (error) {
+    console.error("Error approving user:", error);
+    alert("Failed to approve user. Please try again.");
+  }
 };
 
 
@@ -436,8 +508,89 @@ const handleRejectUser = async (user) => {
     setJobApplicants(applicants);
   };
   
-
-
+  const handleHiredClick = async (jobId, employerId) => {
+    // Clear any previous data first
+    setSelectedJob(null); // Reset before setting new value
+    setHiredJobData([]); // Assuming you have a state variable to store the hired job data
+    setJobApplicants([]);
+    // Now set the new selected job
+    setSelectedJob(jobId);
+    
+    try {
+      console.log(`Loading fresh data for employer: ${employerId}, job: ${jobId}`);
+      
+      // Reference to the hired subcollection for this employer
+      const hiredJobsRef = collection(db, "employers", employerId, "hired");
+      
+      // The key issue was here - trying to use getDocs() with a document reference
+      // Instead of querying the document directly, use getDoc() on a document reference
+      const jobDocRef = doc(hiredJobsRef, jobId);
+      const jobDocSnapshot = await getDoc(jobDocRef);
+      
+      let jobData = [];
+      
+      if (jobDocSnapshot.exists()) {
+        console.log("Hired job data:", jobDocSnapshot.id, " => ", jobDocSnapshot.data());
+        const docData = jobDocSnapshot.data();
+        
+        // Check if the data has an applicants array and flatten it
+        if (docData.applicants && Array.isArray(docData.applicants)) {
+          // Extract the applicants as our main data - this makes the nested data more accessible
+          jobData = docData.applicants.map(applicant => ({
+            ...applicant,
+            jobDocId: jobDocSnapshot.id // Add the parent doc id for reference
+          }));
+        } else {
+          // If structure is different than expected, just use the whole document
+          jobData.push({
+            id: jobDocSnapshot.id,
+            ...docData
+          });
+        }
+      } else {
+        // Alternative: Query for documents where jobId field matches
+        const jobQuery = query(hiredJobsRef, where("jobId", "==", jobId));
+        const querySnapshot = await getDocs(jobQuery);
+        
+        if (querySnapshot.empty) {
+          console.log("No matching hired job found");
+        } else {
+          // Process each document
+          querySnapshot.docs.forEach(doc => {
+            const docData = doc.data();
+            console.log(doc.id, " => ", docData);
+            
+            // Check if the data has an applicants array and flatten it
+            if (docData.applicants && Array.isArray(docData.applicants)) {
+              // Add each applicant to our data array with reference to the parent doc
+              docData.applicants.forEach(applicant => {
+                jobData.push({
+                  ...applicant,
+                  jobDocId: doc.id // Add the parent doc id for reference
+                });
+              });
+            } else {
+              // If structure is different, just add the whole document
+              jobData.push({
+                id: doc.id,
+                ...docData
+              });
+            }
+          });
+        }
+      }
+      
+      console.log("Processed job data:", jobData);
+      
+      // Update state with the processed data
+      setHiredJobData(jobData);
+      
+    } catch (error) {
+      console.error("Error fetching hired job:", error);
+      // Reset on error
+      setHiredJobData([]);
+    }
+  };
   // Handle Applicant Click (from employer's job applicants)
   const handleApplicantClick = (applicant) => {
     setSelectedApplicant(applicant);
@@ -456,6 +609,12 @@ const handleRejectUser = async (user) => {
 
   const handleCloseApplicantModal = () => {
     setSelectedApplicant(null);
+  };
+  const handleCloseHiredModal = () => {
+    showHiredJobData(true);
+  };
+  const handleOpenHiredModal = () => {
+    showHiredJobData(false);
   };
   const handlePublishJob = async (job) => {
     try {
@@ -761,7 +920,7 @@ const handleRejectUser = async (user) => {
     >
       View Applicants
     </button>
-
+    
 
     <button
       onClick={() => {
@@ -1183,6 +1342,12 @@ const handleRejectUser = async (user) => {
             <button onClick={() => handleJobClick(job.id)} style={{ cursor: "pointer" }}>
               View Applicants
             </button>
+            <button onClick={() => {
+                handleHiredClick(job.id, job.employerId);
+                handleOpenHiredModal();
+              }}style={{ cursor: "pointer" }}>
+              View Hired
+            </button>
           </p>
         </li>
       ))}
@@ -1211,7 +1376,126 @@ const handleRejectUser = async (user) => {
         </div>
       )}
 
-
+      {/* Inside your modal or component where you're displaying the job applicants */}
+<div className="job-applicants-container">
+  <h2>Job Applicants</h2>
+  
+  {/* First check if there's any data */}
+  {!showhired && hiredJobData && hiredJobData.length > 0 ? (
+    <div className="applicants-list"
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(0, 0, 0, 0.5)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 1000}}>
+      {/* Map through each applicant */}
+      {hiredJobData.map((applicant, index) => (
+        <div key={applicant.id || index} className="applicant-card"
+        
+        style={{
+          backgroundColor: "white",
+          borderRadius: "8px",
+          padding: "20px",
+          maxWidth: "80%",
+          maxHeight: "80vh",
+          overflowY: "auto", // This makes it scrollable
+          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)"
+        }}>
+          <h3>{applicant.name || 'Unnamed Applicant'}</h3>
+          
+          <div className="applicant-details">
+            <p><strong>Email:</strong> {applicant.email || 'No email provided'}</p>
+            {applicant.githubRepo && (
+              <p><strong>GitHub Repo:</strong> <a href={applicant.githubRepo} target="_blank" rel="noopener noreferrer">{applicant.githubRepo}</a></p>
+            )}
+            
+            {/* Show applied date if available */}
+            {applicant.appliedAt && (
+              <p><strong>Applied:</strong> {new Date(applicant.appliedAt.seconds * 1000).toLocaleDateString()}</p>
+            )}
+            
+            {/* Display certifications if available */}
+            {applicant.certifications && (
+              <div className="certifications">
+                <h4>Certifications</h4>
+                <ul>
+                  {Object.entries(applicant.certifications).map(([cert, items]) => (
+                    items && items.length > 0 ? (
+                      <li key={cert}>
+                        <strong>{cert}:</strong> {items.join(', ')}
+                      </li>
+                    ) : null
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {/* Display submissions if available */}
+            {applicant.submissions && applicant.submissions.length > 0 && (
+              <div className="submissions">
+                <h4>Submissions ({applicant.submissions.length})</h4>
+                {applicant.submissions.map((submission, subIndex) => (
+                  <div key={submission.id || subIndex} className="submission-item">
+                    <h5>Submission {subIndex + 1}</h5>
+                    {submission.liveDemoLink && (
+                      <p><strong>Live Demo:</strong> <a href={submission.liveDemoLink} target="_blank" rel="noopener noreferrer">{submission.liveDemoLink}</a></p>
+                    )}
+                    
+                    {/* Display scores if available */}
+                    {submission.scores && (
+                      <div className="scores">
+                        <h6>Scores</h6>
+                        <ul>
+                          {Object.entries(submission.scores).map(([category, score]) => (
+                            <li key={category}><strong>{category}:</strong> {score}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                     {/* Use your existing close button or form handling mechanism instead */}
+  
+                    {/* Display feedback if available */}
+                    {submission.feedback && (
+                      <div className="feedback">
+                        <h6>Feedback</h6>
+                        {Object.entries(submission.feedback).map(([category, items]) => (
+                          items && items.length > 0 ? (
+                            <div key={category} className="feedback-category">
+                              <strong>{category}:</strong>
+                              <ul>
+                                {items.map((item, i) => (
+                                  <li key={i}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <button className="close-button"
+                      onClick={() => handleCloseHiredModal()}
+                    >Close</button>
+        </div>
+      ))}
+      
+    </div>
+  ) : (
+    <p>No applicants found for this job.</p>
+  )}
+  
+ 
+</div>
       {/* Job Applicants Modal */}
       {selectedJob && (
         <div
@@ -1280,7 +1564,7 @@ const handleRejectUser = async (user) => {
           </div>
         </div>
       )}
-
+    
 
       {/* Applicant Detailed View */}
       {selectedApplicant && (
@@ -1397,7 +1681,7 @@ const handleRejectUser = async (user) => {
             </tbody>
           </table>
 
-
+              
           {/* Job Details Modal */}
           {selectedJob && !isApplicant && (
             <div
@@ -1699,9 +1983,3 @@ const handleRejectUser = async (user) => {
 
 
 export default AdminPage;
-
-
-
-
-
-
