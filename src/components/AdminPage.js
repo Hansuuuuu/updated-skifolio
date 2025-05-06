@@ -274,6 +274,33 @@ if (historyVisible) fetchHistoryData();
 // Approve User
 const handleApproveUser = async (user) => {
     try {
+      const nodemailer = require('nodemailer');
+ 
+      // Create a transporter object using SendLayer's SMTP server
+      var transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: 'dumaccno8@gmail.com',
+          pass: 'Legend65'
+        }
+      });
+      
+      var mailOptions = {
+        from: 'no-reply@gmail.com',
+        to: (user.email),
+        subject: 'Account Creation',
+        text: 'ACCOUNT WAS APPROVE AND CAN BE USED NOW! \n Welcome to SKI-FOLIO! \n Happy Job Hunting!'
+      };
+       
+      // Send email
+      transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                 console.error('Error sending email:', error);
+            } else {
+                 console.log('Email sent:', info.response);
+            }
+         }
+      );
         const targetCollection = user.type === "applicant" ? "applicants" : "employers";
 
 

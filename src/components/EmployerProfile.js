@@ -1594,7 +1594,7 @@ const EmployerProfile = () => {
 
             {/* Applicant Modal */}
             {selectedApplicant && (
-                <div className="modal-overlay" style={{
+                <div className="modal-overlay1" style={{
                     position: 'fixed',
                     top: 0,
                     left: 0,
