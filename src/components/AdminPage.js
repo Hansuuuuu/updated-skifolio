@@ -27,6 +27,7 @@ const AdminPage = () => {
   const [jobApplicants, setJobApplicants] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedApplicant, setSelectedApplicant] = useState(null);
+  const [selectedHiredApplicant, setSelectedHiredApplicant] = useState(null);
   const [pendingJobs, setPendingJobs] = useState([]);
   const [isUserClassVisible, setIsUserClassVisible] = useState(true)
   const [isUserApproval, setUserApproval] = useState(true)
@@ -42,9 +43,9 @@ const AdminPage = () => {
   const [showhired, showHiredJobData] = useState(false);
   // const [announcements, setAnnouncements] = useState([]);
   // const [newAnnouncement, setNewAnnouncement] = useState('');
-    const [activeTab, setActiveTab] = useState('manageUsers');
-
-
+  const [activeTab, setActiveTab] = useState('manageUsers');
+  const [viewingHired, setViewingHired] = useState(false);
+  const [applicantshow,setShowApplicant] = useState([]);
   // Function to add history record with a timestamp
   const addHistoryRecord = async (event, details) => {
     const timestamp = new Date().toISOString(); // Get current timestamp
@@ -491,7 +492,6 @@ const handleRejectUser = async (user) => {
     if (jobs.length === 0) {
       console.log("No jobs found for this employer.");  // Debugging log if no jobs are found
     }
-  
     setSelectedJob(null);
     setJobApplicants([]);
   };
@@ -507,97 +507,157 @@ const handleRejectUser = async (user) => {
     const applicants = applicantsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     setJobApplicants(applicants);
   };
+  const handleHiredClick = async (job) => {
+    console.log("Received job object:", job);
   
-  const handleHiredClick = async (jobId, employerId) => {
-    // Clear any previous data first
-    setSelectedJob(null); // Reset before setting new value
-    setHiredJobData([]); // Assuming you have a state variable to store the hired job data
-    setJobApplicants([]);
-    // Now set the new selected job
-    setSelectedJob(jobId);
-    
+    if (!job || !job.employerId) {
+      console.error("Missing job or employerId");
+      return;
+    }
+  
+    setSelectedJob(job);
+    setViewingHired(true);
+  
     try {
-      console.log(`Loading fresh data for employer: ${employerId}, job: ${jobId}`);
-      
-      // Reference to the hired subcollection for this employer
-      const hiredJobsRef = collection(db, "employers", employerId, "hired");
-      
-      // The key issue was here - trying to use getDocs() with a document reference
-      // Instead of querying the document directly, use getDoc() on a document reference
-      const jobDocRef = doc(hiredJobsRef, jobId);
-      const jobDocSnapshot = await getDoc(jobDocRef);
-      
-      let jobData = [];
-      
-      if (jobDocSnapshot.exists()) {
-        console.log("Hired job data:", jobDocSnapshot.id, " => ", jobDocSnapshot.data());
-        const docData = jobDocSnapshot.data();
-        
-        // Check if the data has an applicants array and flatten it
-        if (docData.applicants && Array.isArray(docData.applicants)) {
-          // Extract the applicants as our main data - this makes the nested data more accessible
-          jobData = docData.applicants.map(applicant => ({
-            ...applicant,
-            jobDocId: jobDocSnapshot.id // Add the parent doc id for reference
-          }));
-        } else {
-          // If structure is different than expected, just use the whole document
-          jobData.push({
-            id: jobDocSnapshot.id,
-            ...docData
-          });
-        }
-      } else {
-        // Alternative: Query for documents where jobId field matches
-        const jobQuery = query(hiredJobsRef, where("jobId", "==", jobId));
-        const querySnapshot = await getDocs(jobQuery);
-        
-        if (querySnapshot.empty) {
-          console.log("No matching hired job found");
-        } else {
-          // Process each document
-          querySnapshot.docs.forEach(doc => {
-            const docData = doc.data();
-            console.log(doc.id, " => ", docData);
-            
-            // Check if the data has an applicants array and flatten it
-            if (docData.applicants && Array.isArray(docData.applicants)) {
-              // Add each applicant to our data array with reference to the parent doc
-              docData.applicants.forEach(applicant => {
-                jobData.push({
-                  ...applicant,
-                  jobDocId: doc.id // Add the parent doc id for reference
-                });
-              });
-            } else {
-              // If structure is different, just add the whole document
-              jobData.push({
-                id: doc.id,
-                ...docData
-              });
-            }
-          });
-        }
+      const hiredJobsRef = collection(db, "employers", job.employerId, "hired");
+      const hiredJobsSnapshot = await getDocs(hiredJobsRef);
+      const allHiredJobs = hiredJobsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+  
+      const matched = allHiredJobs.find((h) => h.id === job.id);
+  
+      if (!matched || !matched.applicants) {
+        setHiredJobData([]);
+        return;
       }
-      
-      console.log("Processed job data:", jobData);
-      
-      // Update state with the processed data
-      setHiredJobData(jobData);
-      
+  
+      console.log("Setting hiredJobData to applicants:", matched.applicants);
+      setHiredJobData(matched.applicants); // ✅ Set directly to array
+  
     } catch (error) {
-      console.error("Error fetching hired job:", error);
-      // Reset on error
-      setHiredJobData([]);
+      console.error("Error fetching hired jobs:", error);
     }
   };
+  
+  
+  
+  // const handleHiredClick = async (jobId, employerId) => {
+  //   // Clear any previous data first
+  //   setSelectedJob(null); // Reset before setting new value
+  //   setHiredJobData([]); // Assuming you have a state variable to store the hired job data
+  //   setJobApplicants([]);
+  //   // Now set the new selected job
+  //   setSelectedJob(jobId);
+    
+  //   try {
+  //     console.log(`Loading fresh data for employer: ${employerId}, job: ${jobId}`);
+      
+  //     // Reference to the hired subcollection for this employer
+  //     const hiredJobsRef = collection(db, "employers", employerId, "hired");
+      
+  //     // The key issue was here - trying to use getDocs() with a document reference
+  //     // Instead of querying the document directly, use getDoc() on a document reference
+  //     const jobDocRef = doc(hiredJobsRef, jobId);
+  //     const jobDocSnapshot = await getDoc(jobDocRef);
+      
+  //     let jobData = [];
+      
+  //     if (jobDocSnapshot.exists()) {
+  //       console.log("Hired job data:", jobDocSnapshot.id, " => ", jobDocSnapshot.data());
+  //       const docData = jobDocSnapshot.data();
+        
+  //       // Check if the data has an applicants array and flatten it
+  //       if (docData.applicants && Array.isArray(docData.applicants)) {
+  //         // Extract the applicants as our main data - this makes the nested data more accessible
+  //         jobData = docData.applicants.map(applicant => ({
+  //           ...applicant,
+  //           jobDocId: jobDocSnapshot.id // Add the parent doc id for reference
+  //         }));
+  //       } else {
+  //         // If structure is different than expected, just use the whole document
+  //         jobData.push({
+  //           id: jobDocSnapshot.id,
+  //           ...docData
+  //         });
+  //       }
+  //     } else {
+  //       // Alternative: Query for documents where jobId field matches
+  //       const jobQuery = query(hiredJobsRef, where("jobId", "==", jobId));
+  //       const querySnapshot = await getDocs(jobQuery);
+        
+  //       if (querySnapshot.empty) {
+  //         console.log("No matching hired job found");
+  //       } else {
+  //         // Process each document
+  //         querySnapshot.docs.forEach(doc => {
+  //           const docData = doc.data();
+  //           console.log(doc.id, " => ", docData);
+            
+  //           // Check if the data has an applicants array and flatten it
+  //           if (docData.applicants && Array.isArray(docData.applicants)) {
+  //             // Add each applicant to our data array with reference to the parent doc
+  //             docData.applicants.forEach(applicant => {
+  //               jobData.push({
+  //                 ...applicant,
+  //                 jobDocId: doc.id // Add the parent doc id for reference
+  //               });
+  //             });
+  //           } else {
+  //             // If structure is different, just add the whole document
+  //             jobData.push({
+  //               id: doc.id,
+  //               ...docData
+  //             });
+  //           }
+  //         });
+  //       }
+  //     }
+      
+  //     console.log("Processed job data:", jobData);
+      
+  //     // Update state with the processed data
+  //     setHiredJobData(jobData);
+      
+  //   } catch (error) {
+  //     console.error("Error fetching hired job:", error);
+  //     // Reset on error
+  //     setHiredJobData([]);
+  //   }
+  // };
   // Handle Applicant Click (from employer's job applicants)
-  const handleApplicantClick = (applicant) => {
+// Separate handlers for each modal
+const handleApplicantClick = (applicant) => {
+  if (selectedApplicant && selectedApplicant.name === applicant.name) {
+    setSelectedApplicant(null);
+  } else {
     setSelectedApplicant(applicant);
-    setIsApplicant(true);
+    setIsApplicant(true)
+  }
+};
+const openHiredModal = (jobData) => {
+  // Make sure to load hired job data separately 
+  // Load your data here, e.g., from an API call or your data source
+  // For example: loadHiredData(jobId).then(data => setHiredJobData(data));
+  
+  setHiredJobData(jobData); // Set this to your actual hired applicants data
+  setViewingHired(true);
+  
+  // IMPORTANT: Do not set selectedJob when opening hired modal
+};
+
+const handleHiredApplicantClick = (applicant) => {
+  if (selectedHiredApplicant && selectedHiredApplicant.name === applicant.name) {
+    setSelectedHiredApplicant(null);
+  } else {
+    setSelectedHiredApplicant(applicant);
+  }
+};
+  const closeHiredModal = () => {
+    setViewingHired(false);
+    setSelectedHiredApplicant(null);
   };
-
-
   // Close Modals
   const handleCloseUserModal = () => {
     setSelectedUser(null);
@@ -905,6 +965,7 @@ const handleRejectUser = async (user) => {
         setShowDeletedFiles(false);
         setHistoryVisible(false);
         setShowAnnouncement(false);
+        setShowApplicant(true);
       }}
       style={{
         display: "block",
@@ -1339,12 +1400,17 @@ const handleRejectUser = async (user) => {
             <strong>Job Role:</strong> {job.jobRole}
           </p>
           <p>
-            <button onClick={() => handleJobClick(job.id)} style={{ cursor: "pointer" }}>
+            <button onClick={() => {
+  handleJobClick(job.id);
+  setShowApplicant(true);
+}}
+ style={{ cursor: "pointer" }}>
               View Applicants
             </button>
             <button onClick={() => {
-                handleHiredClick(job.id, job.employerId);
-                handleOpenHiredModal();
+                handleHiredClick(job);
+                setShowApplicant(false);
+                // handleOpenHiredModal();
               }}style={{ cursor: "pointer" }}>
               View Hired
             </button>
@@ -1377,12 +1443,10 @@ const handleRejectUser = async (user) => {
       )}
 
       {/* Inside your modal or component where you're displaying the job applicants */}
-<div className="job-applicants-container">
-  <h2>Job Applicants</h2>
-  
-  {/* First check if there's any data */}
-  {!showhired && hiredJobData && hiredJobData.length > 0 ? (
-    <div className="applicants-list"
+
+{/* Regular Job Applicants Modal */}
+{selectedJob && !viewingHired && applicantshow &&(
+  <div
     style={{
       position: "fixed",
       top: 0,
@@ -1393,178 +1457,328 @@ const handleRejectUser = async (user) => {
       display: "flex",
       justifyContent: "center",
       alignItems: "center",
-      zIndex: 1000}}>
-      {/* Map through each applicant */}
-      {hiredJobData.map((applicant, index) => (
-        <div key={applicant.id || index} className="applicant-card"
-        
+      zIndex: 1000,
+    }}
+  >
+    <div
+      style={{
+        backgroundColor: "#fff",
+        padding: "20px",
+        borderRadius: "5px",
+        maxWidth: "600px",
+        width: "90%",
+        maxHeight: "80%",
+        overflowY: "auto",
+        position: "relative",
+      }}
+    >
+      {/* Close Button */}
+      <button
+        onClick={() => setSelectedJob(null)}
         style={{
-          backgroundColor: "white",
-          borderRadius: "8px",
-          padding: "20px",
-          maxWidth: "80%",
-          maxHeight: "80vh",
-          overflowY: "auto", // This makes it scrollable
-          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)"
-        }}>
-          <h3>{applicant.name || 'Unnamed Applicant'}</h3>
-          
-          <div className="applicant-details">
-            <p><strong>Email:</strong> {applicant.email || 'No email provided'}</p>
-            {applicant.githubRepo && (
-              <p><strong>GitHub Repo:</strong> <a href={applicant.githubRepo} target="_blank" rel="noopener noreferrer">{applicant.githubRepo}</a></p>
-            )}
-            
-            {/* Show applied date if available */}
-            {applicant.appliedAt && (
-              <p><strong>Applied:</strong> {new Date(applicant.appliedAt.seconds * 1000).toLocaleDateString()}</p>
-            )}
-            
-            {/* Display certifications if available */}
-            {applicant.certifications && (
-              <div className="certifications">
-                <h4>Certifications</h4>
-                <ul>
-                  {Object.entries(applicant.certifications).map(([cert, items]) => (
-                    items && items.length > 0 ? (
-                      <li key={cert}>
-                        <strong>{cert}:</strong> {items.join(', ')}
-                      </li>
-                    ) : null
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {/* Display submissions if available */}
-            {applicant.submissions && applicant.submissions.length > 0 && (
-              <div className="submissions">
-                <h4>Submissions ({applicant.submissions.length})</h4>
-                {applicant.submissions.map((submission, subIndex) => (
-                  <div key={submission.id || subIndex} className="submission-item">
-                    <h5>Submission {subIndex + 1}</h5>
-                    {submission.liveDemoLink && (
-                      <p><strong>Live Demo:</strong> <a href={submission.liveDemoLink} target="_blank" rel="noopener noreferrer">{submission.liveDemoLink}</a></p>
-                    )}
-                    
-                    {/* Display scores if available */}
-                    {submission.scores && (
-                      <div className="scores">
-                        <h6>Scores</h6>
-                        <ul>
-                          {Object.entries(submission.scores).map(([category, score]) => (
-                            <li key={category}><strong>{category}:</strong> {score}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                     {/* Use your existing close button or form handling mechanism instead */}
-  
-                    {/* Display feedback if available */}
-                    {submission.feedback && (
-                      <div className="feedback">
-                        <h6>Feedback</h6>
-                        {Object.entries(submission.feedback).map(([category, items]) => (
-                          items && items.length > 0 ? (
-                            <div key={category} className="feedback-category">
-                              <strong>{category}:</strong>
-                              <ul>
-                                {items.map((item, i) => (
-                                  <li key={i}>{item}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          ) : null
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <button className="close-button"
-                      onClick={() => handleCloseHiredModal()}
-                    >Close</button>
-        </div>
-      ))}
+          position: "absolute",
+          top: "10px",
+          right: "10px",
+          background: "none",
+          border: "none",
+          fontSize: "24px",
+          cursor: "pointer",
+          padding: "5px",
+          fontWeight: "bold",
+          color: "#333",
+        }}
+      >
+        ×
+      </button>
       
+      {/* Regular Job Applicants Section */}
+      <h4>Job Applicants</h4>
+      <ul>
+        {jobApplicants.map((applicant, index) => (
+          <li key={index}>
+            <p>
+              <strong>Name:</strong> {applicant.name}
+            </p>
+            <p>
+              <button
+               onClick={() => {
+                handleApplicantClick(applicant);
+                setShowApplicant(true);
+              }}
+              
+                style={{
+                  padding: "5px 10px",
+                  backgroundColor: "#007bff",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "3px",
+                  cursor: "pointer",
+                }}
+              >
+                View Applicant
+              </button>
+            </p>
+          </li>
+        ))}
+      </ul>
     </div>
-  ) : (
-    <p>No applicants found for this job.</p>
-  )}
-  
- 
-</div>
-      {/* Job Applicants Modal */}
-      {selectedJob && (
-        <div
+  </div>
+)}
+
+{/* Completely Separate Hired Applicants Modal */}
+{viewingHired && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(0, 0, 0, 0.5)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 1001,
+    }}
+  >
+    <div
+      style={{
+        backgroundColor: "#fff",
+        padding: "20px",
+        borderRadius: "5px",
+        maxWidth: "600px",
+        width: "90%",
+        maxHeight: "80%",
+        overflowY: "auto",
+      }}
+    >
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center", 
+        marginBottom: "15px" 
+      }}>
+        <h4 style={{ margin: 0 }}>Hired Applicants</h4>
+        <button 
+          onClick={() => {
+            setViewingHired(false);
+            setSelectedHiredApplicant(null);
+            // Don't modify selectedJob here
+          }}
           style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
+            background: "none",
+            border: "none",
+            fontSize: "20px",
+            cursor: "pointer",
+            color: "#555"
           }}
         >
-          <div
-            style={{
-              backgroundColor: "#fff",
-              padding: "20px",
-              borderRadius: "5px",
-              maxWidth: "600px",
-              width: "90%",
-              maxHeight: "80%",
-              overflowY: "auto",
-            }}
+          &times;
+        </button>
+      </div>
+      
+      {/* Only render this content if hiredJobData exists */}
+      {hiredJobData && hiredJobData.length > 0 ? (
+  <ul className="list-none p-0 m-0 space-y-4">
+    {hiredJobData.map((applicant, index) => (
+      <li key={index} className="border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow duration-200 bg-white">
+        <div className="flex justify-between items-center">
+          <p className="font-medium text-lg text-gray-800 m-0">{applicant.name}</p>
+          <button
+            onClick={() => handleHiredApplicantClick(applicant)}
+            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors duration-200 text-sm font-medium flex items-center"
           >
-            <h4>Job Applicants</h4>
-            <ul>
-              {jobApplicants.map((applicant, index) => (
-                <li key={index}>
-                  <p>
-                    <strong>Name:</strong> {applicant.name}
-                  </p>
-                  <p>
-                    <button
-                      onClick={() => handleApplicantClick(applicant)}
-                      style={{
-                        padding: "5px 10px",
-                        backgroundColor: "#007bff",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "3px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      View Applicant
-                    </button>
-                  </p>
-                </li>
-              ))}
-            </ul>
-            <button
-              onClick={() => setSelectedJob(null)}
-              style={{
-                marginTop: "20px",
-                padding: "10px 15px",
-                backgroundColor: "#007bff",
-                color: "#fff",
-                border: "none",
-                borderRadius: "5px",
-                cursor: "pointer",
-              }}
-            >
-              Close
-            </button>
-          </div>
+            {selectedHiredApplicant && selectedHiredApplicant.userId === applicant.userId 
+              ? 'Hide Details' 
+              : 'View Details'
+            }
+          </button>
         </div>
-      )}
+
+        {/* Applicant detail section when selected */}
+        {selectedHiredApplicant && selectedHiredApplicant.userId === applicant.userId && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="flex items-start">
+                <span className="font-semibold text-gray-700 mr-2">Email:</span>
+                <span className="text-gray-600 break-all">{applicant.email}</span>
+              </div>
+              <div className="flex items-start">
+                <span className="font-semibold text-gray-700 mr-2">GitHub:</span>
+                <a 
+                  href={applicant.githubRepo} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="text-blue-600 hover:text-blue-800 break-all"
+                >
+                  {applicant.githubRepo}
+                </a>
+              </div>
+              <div className="flex items-start">
+                <span className="font-semibold text-gray-700 mr-2">Applied At:</span>
+                <span className="text-gray-600">{applicant.appliedAt?.toDate().toLocaleString() || 'N/A'}</span>
+              </div>
+              <div className="flex items-start">
+                <span className="font-semibold text-gray-700 mr-2">Job ID:</span>
+                <span className="text-gray-600 font-mono text-sm">{applicant.jobId}</span>
+              </div>
+              <div className="flex items-start">
+                <span className="font-semibold text-gray-700 mr-2">User ID:</span>
+                <span className="text-gray-600 font-mono text-sm">{applicant.userId}</span>
+              </div>
+            </div>
+
+            {/* Certifications if they exist */}
+            {applicant.certifications && (
+              <div className="mt-4">
+                <p className="font-semibold text-gray-700 mb-2">Certifications:</p>
+                <div className="space-y-4">
+                  {Object.entries(applicant.certifications).map(([category, certs]) => 
+                    certs.length > 0 && (
+                      <div key={category} className="bg-white border border-gray-200 rounded-md overflow-hidden">
+                        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                          <h4 className="font-medium text-gray-700">{category}</h4>
+                        </div>
+                        <div className="p-0">
+                          {certs.map((cert, idx) => (
+                            <div key={idx} className="p-4 border-b border-gray-100 last:border-b-0">
+                              <div className="flex flex-col space-y-2">
+                                <div className="flex justify-between">
+                                  <span className="font-medium text-gray-800">{cert.name}</span>
+                                  <span className="text-sm text-gray-500">ID: {cert.credentialID}</span>
+                                </div>
+                                <div className="text-sm text-gray-600">Issued by {cert.issuer}</div>
+                                <div className="flex justify-between text-sm text-gray-600">
+                                  <span>Issued: {new Date(cert.issueDate).toLocaleDateString()}</span>
+                                  <span>Expires: {new Date(cert.expiryDate).toLocaleDateString()}</span>
+                                </div>
+                                {cert.imageURL && (
+                                  <div className="mt-2">
+                                    <img 
+                                      src={cert.imageURL} 
+                                      alt={`${cert.name} Certificate`} 
+                                      style={{ width: '100%', height: 'auto' }} 
+                                    />
+
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Optional profile image */}
+            {applicant.imageURL && !applicant.certifications && (
+              <div className="mt-4">
+                <p className="font-semibold text-gray-700 mb-2">Profile Image:</p>
+                <img 
+                  src={applicant.imageURL} 
+                  alt="Profile" 
+                  className="max-w-full h-auto rounded-md border border-gray-200 shadow-sm"
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </li>
+    ))}
+  </ul>
+) : (
+  <div className="flex flex-col items-center justify-center py-12 px-4">
+    <p className="text-gray-500 text-lg">No hired applicants available.</p>
+  </div>
+)}
+
+      
+      <button
+        onClick={() => {
+          setViewingHired(false);
+          setSelectedHiredApplicant(null);
+
+
+          // Don't modify selectedJob here
+        }}
+        style={{
+          marginTop: "20px",
+          padding: "10px 15px",
+          backgroundColor: "#007bff",
+          color: "#fff",
+          border: "none",
+          borderRadius: "5px",
+          cursor: "pointer",
+          display: "block",
+          width: "100%"
+        }}
+      >
+        Close
+      </button>
+    </div>
+  </div>
+)}
+{/* Job Applicants Modal */}
+{/* {hiredJobData && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(0, 0, 0, 0.5)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 1000,
+    }}
+  >
+    <div
+      style={{
+        backgroundColor: "#fff",
+        padding: "20px",
+        borderRadius: "5px",
+        maxWidth: "600px",
+        width: "90%",
+        maxHeight: "80%",
+        overflowY: "auto",
+      }}
+    > */}
+      {/* Regular Job Applicants Section */}
+      {/* <h4>Job Applicants</h4>
+      <ul>
+        {hiredJobData.map((applicant, index) => (
+          <li key={index}>
+            <p>
+              <strong>Name:</strong> {applicant.name}
+            </p>
+            <p>
+              <button
+                onClick={() => handleApplicantClick(applicant)}
+                style={{
+                  padding: "5px 10px",
+                  backgroundColor: "#007bff",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "3px",
+                  cursor: "pointer",
+                }}
+              >
+                View Applicant
+              </button>
+            </p>
+          </li>
+        ))}
+      </ul>
     
+    </div>
+  </div>
+)} */}
+
 
       {/* Applicant Detailed View */}
       {selectedApplicant && (
@@ -1579,6 +1793,7 @@ const handleRejectUser = async (user) => {
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
+            zIndex: 2000,
           }}
         >
           <div
@@ -1983,3 +2198,123 @@ const handleRejectUser = async (user) => {
 
 
 export default AdminPage;
+
+{/* <div className="job-applicants-container">
+  <h2>Job Applicants</h2>
+   */}
+  {/* First check if there's any data */}
+//   {!showhired && hiredJobData && hiredJobData.length > 0 ? (
+//     <div className="applicants-list"
+//     style={{
+//       position: "fixed",
+//       top: 0,
+//       left: 0,
+//       width: "100%",
+//       height: "100%",
+//       backgroundColor: "rgba(0, 0, 0, 0.5)",
+//       display: "flex",
+//       justifyContent: "center",
+//       alignItems: "center",
+//       zIndex: 1000}}>
+//       {/* Map through each applicant */}
+//       {hiredJobData.map((applicant, index) => (
+//         <div key={applicant.id || index} className="applicant-card"
+        
+//         style={{
+//           backgroundColor: "white",
+//           borderRadius: "8px",
+//           padding: "20px",
+//           maxWidth: "80%",
+//           maxHeight: "80vh",
+//           overflowY: "auto", // This makes it scrollable
+//           boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)"
+//         }}>
+//           <h3>{applicant.name || 'Unnamed Applicant'}</h3>
+          
+//           <div className="applicant-details">
+//             <p><strong>Email:</strong> {applicant.email || 'No email provided'}</p>
+//             {applicant.githubRepo && (
+//               <p><strong>GitHub Repo:</strong> <a href={applicant.githubRepo} target="_blank" rel="noopener noreferrer">{applicant.githubRepo}</a></p>
+//             )}
+            
+//             {/* Show applied date if available */}
+//             {applicant.appliedAt && (
+//               <p><strong>Applied:</strong> {new Date(applicant.appliedAt.seconds * 1000).toLocaleDateString()}</p>
+//             )}
+            
+//             {/* Display certifications if available */}
+//             {applicant.certifications && (
+//               <div className="certifications">
+//                 <h4>Certifications</h4>
+//                 <ul>
+//                   {Object.entries(applicant.certifications).map(([cert, items]) => (
+//                     items && items.length > 0 ? (
+//                       <li key={cert}>
+//                         <strong>{cert}:</strong> {items.join(', ')}
+//                       </li>
+//                     ) : null
+//                   ))}
+//                 </ul>
+//               </div>
+//             )}
+            
+//             {/* Display submissions if available */}
+//             {applicant.submissions && applicant.submissions.length > 0 && (
+//               <div className="submissions">
+//                 <h4>Submissions ({applicant.submissions.length})</h4>
+//                 {applicant.submissions.map((submission, subIndex) => (
+//                   <div key={submission.id || subIndex} className="submission-item">
+//                     <h5>Submission {subIndex + 1}</h5>
+//                     {submission.liveDemoLink && (
+//                       <p><strong>Live Demo:</strong> <a href={submission.liveDemoLink} target="_blank" rel="noopener noreferrer">{submission.liveDemoLink}</a></p>
+//                     )}
+                    
+//                     {/* Display scores if available */}
+//                     {submission.scores && (
+//                       <div className="scores">
+//                         <h6>Scores</h6>
+//                         <ul>
+//                           {Object.entries(submission.scores).map(([category, score]) => (
+//                             <li key={category}><strong>{category}:</strong> {score}</li>
+//                           ))}
+//                         </ul>
+//                       </div>
+//                     )}
+//                      {/* Use your existing close button or form handling mechanism instead */}
+  
+//                     {/* Display feedback if available */}
+//                     {submission.feedback && (
+//                       <div className="feedback">
+//                         <h6>Feedback</h6>
+//                         {Object.entries(submission.feedback).map(([category, items]) => (
+//                           items && items.length > 0 ? (
+//                             <div key={category} className="feedback-category">
+//                               <strong>{category}:</strong>
+//                               <ul>
+//                                 {items.map((item, i) => (
+//                                   <li key={i}>{item}</li>
+//                                 ))}
+//                               </ul>
+//                             </div>
+//                           ) : null
+//                         ))}
+//                       </div>
+//                     )}
+//                   </div>
+//                 ))}
+//               </div>
+//             )}
+//           </div>
+//           <button className="close-button"
+//                       onClick={() => handleCloseHiredModal()}
+//                     >Close</button>
+//         </div>
+//       ))}
+      
+//     </div>
+//   ) : (
+//     <p>No applicants found for this job.</p>
+//   )}
+  
+ 
+// </div>
