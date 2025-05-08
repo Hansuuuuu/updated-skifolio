@@ -22,6 +22,7 @@
     "express": "^4.21.2",
     "firebase": "^11.4.0",
     "git": "^0.1.5",
+    "lucide-react": "^0.508.0",
     "net": "^1.0.2",
     "os-browserify": "^0.3.0",
     "process": "^0.11.10",
