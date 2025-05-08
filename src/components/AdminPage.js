@@ -41,11 +41,15 @@ const AdminPage = () => {
   const [showDashboard, setShowDashboard] = useState(true); // Show Dashboard by default
   const [hiredJobData, setHiredJobData] = useState([]);
   const [showhired, showHiredJobData] = useState(false);
+
   // const [announcements, setAnnouncements] = useState([]);
   // const [newAnnouncement, setNewAnnouncement] = useState('');
   const [activeTab, setActiveTab] = useState('manageUsers');
   const [viewingHired, setViewingHired] = useState(false);
   const [applicantshow,setShowApplicant] = useState([]);
+  const [viewingReport, setViewingReport] = useState(false);
+  const [reportShow,setShowReport] = useState([]);
+  const [hasFetchedReports, setHasFetchedReports] = useState(false);
   // Function to add history record with a timestamp
   const addHistoryRecord = async (event, details) => {
     const timestamp = new Date().toISOString(); // Get current timestamp
@@ -66,7 +70,25 @@ const AdminPage = () => {
       console.error("Error adding history record: ", error);
     }
   };
-  
+  useEffect(() => {
+    if (selectedUserType === "Report" && !hasFetchedReports) {
+      const fetchReports = async () => {
+        try {
+          const querySnapshot = await getDocs(collection(db, "job_reports"));
+          const reports = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          setShowReport(reports);
+          setHasFetchedReports(true);
+        } catch (error) {
+          console.error("Error fetching reports:", error);
+        }
+      };
+
+      fetchReports();
+    }
+  }, [selectedUserType, hasFetchedReports]);
   // Fetch applicants and employers from Firestore
   useEffect(() => {
     const fetchUsers = async () => {
@@ -981,7 +1003,24 @@ const handleHiredApplicantClick = (applicant) => {
     >
       View Applicants
     </button>
-    
+    <button
+        onClick={() => {
+          setSelectedUserType("Report");
+        }}
+        style={{
+          display: "block",
+          width: "100%",
+          marginBottom: "10px",
+          padding: "10px",
+          backgroundColor: selectedUserType === "Report" ? "#007bff" : "#ddd",
+          color: "#fff",
+          border: "none",
+          borderRadius: "5px",
+          cursor: "pointer",
+        }}
+      >
+        View Reports
+      </button>
 
     <button
       onClick={() => {
@@ -1322,33 +1361,72 @@ const handleHiredApplicantClick = (applicant) => {
 
             {selectedUserType === "Applicants" && !isUserClassVisible ? (
   <>
-    <p>
-      <strong>Name:</strong> {selectedUser.name}
-    </p>
-    <p>
-      <strong>Email:</strong> {selectedUser.email}
-    </p>
-    <p>
-      <strong>Resume:</strong>{" "}
-      <a href={selectedUser.resumeURL} target="_blank" rel="noopener noreferrer">
-        View Resume
-      </a>
-    </p>
-    <h5>Submissions</h5>
-    <ul>
-      {selectedUser.submissions?.map((submission, index) => (
-        <li key={index}>
-          <strong>Live Demo:</strong>{" "}
-          <a href={submission.liveDemoLink} target="_blank" rel="noopener noreferrer">
-            View
-          </a>{" "}
-          | <strong>Demo Video:</strong>{" "}
-          <a href={submission.demoVideoLink} target="_blank" rel="noopener noreferrer">
-            Watch
-          </a>
-        </li>
+
+    <div>
+      <img
+        src={selectedUser.profilePicURL}
+        alt={`${selectedUser.name}'s Profile`}
+        style={{ width: "150px", borderRadius: "50%" }}
+      />
+      <p><strong>Name:</strong> {selectedUser.name}</p>
+      <p><strong>Email:</strong> {selectedUser.email}</p>
+      <p><strong>Experience:</strong> {selectedUser.experience}</p>
+      <p><strong>GitHub:</strong> <a href={selectedUser.githubRepo} target="_blank" rel="noopener noreferrer">{selectedUser.githubRepo}</a></p>
+
+      <h3>Selected Jobs</h3>
+      <ul>
+        {selectedUser.selectedJobs?.map((job, index) => (
+          <li key={index}>{job}</li>
+        ))}
+      </ul>
+
+      <h3>Skills</h3>
+      <ul>
+        {Object.entries(selectedUser.skills || {}).map(([skill, hasSkill]) => (
+          hasSkill ? <li key={skill}>{skill}</li> : null
+        ))}
+      </ul>
+
+      <h3>Certifications</h3>
+
+      {Object.entries(selectedUser.certifications || {}).map(([category, certArray]) => (
+        <div key={category}>
+          <h4>{category}</h4>
+          {certArray.length === 0 ? (
+            <p>No certifications.</p>
+          ) : (
+            certArray.map((cert, index) => (
+              <div key={index} style={{ border: "1px solid #ccc", padding: "10px", marginBottom: "10px" }}>
+                <img src={cert.imageURL} alt={cert.name} style={{ width: "200px" }} />
+                <p><strong>Name:</strong> {cert.name}</p>
+                <p><strong>Issuer:</strong> {cert.issuer}</p>
+                <p><strong>Issue Date:</strong> {cert.issueDate}</p>
+                <p><strong>Expiry Date:</strong> {cert.expiryDate}</p>
+                <p><strong>Credential ID:</strong> {cert.credentialID}</p>
+              </div>
+            ))
+          )}
+        </div>
       ))}
-    </ul>
+
+      {selectedUser.submissions && selectedUser.submissions.length > 0 && (
+        <>
+          <h5>Submissions</h5>
+          <ul>
+            {selectedUser.submissions.map((submission, index) => (
+              <li key={index}>
+                <strong>Live Demo:</strong>{" "}
+                <a href={submission.liveDemoLink} target="_blank" rel="noopener noreferrer">
+                  View
+                </a>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+
+
     <h5>Applied Jobs</h5>
     <ul>
       {selectedUser.appliedJobs?.map((job, index) => (
@@ -1362,6 +1440,24 @@ const handleHiredApplicantClick = (applicant) => {
           <p>
             <strong>Applied At:</strong> {job.appliedAt?.toDate().toLocaleString() || "N/A"}
           </p>
+          
+        </li>
+      ))}
+    </ul>
+    <h5>Hired Jobs</h5>
+    <ul>
+      {selectedUser.appliedJobs?.map((job, index) => (
+        <li key={index}>
+          <p>
+            <strong>Job Title:</strong> {job.title}
+          </p>
+          <p>
+            <strong>Location:</strong> {job.location}
+          </p>
+          <p>
+            <strong>Applied At:</strong> {job.appliedAt?.toDate().toLocaleString() || "N/A"}
+          </p>
+          
         </li>
       ))}
     </ul>
@@ -2190,7 +2286,81 @@ const handleHiredApplicantClick = (applicant) => {
 
 
 </div>
+{selectedUserType === "Report" && (
+  <div className="report-container">
+    {reportShow.length === 0 ? (
+      <p>No reports available.</p>
+    ) : (
+      reportShow.map((report, index) => {
+        const isUnread = report.status === 'pending';
+        const isApplicantReport = report.hasOwnProperty('applicantName');
+        const isEmployerReport = report.hasOwnProperty('companyName');
 
+        return (
+          <div
+            key={index}
+            className="report-summary"
+            onClick={() => {
+              setViewingReport(report);
+              const updatedReports = [...reportShow];
+              updatedReports[index].status = 'read';
+              setShowReport(updatedReports);
+            }}
+            style={{
+              border: '1px solid #ccc',
+              marginBottom: '10px',
+              padding: '10px',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <strong>
+                {isEmployerReport ? report.reporterName : report.applicantName}
+              </strong>
+              <span>
+                {isUnread && <span style={{ color: 'red', marginRight: '5px' }}>🔴</span>}
+                {report.status}
+              </span>
+            </div>
+            <p>
+              {isEmployerReport
+                ? `Job Title: ${report.jobTitle}`
+                : `Violation: ${report.violationType}`}
+            </p>
+
+            {/* Expanded View */}
+            {viewingReport === report && (
+              <div style={{ marginTop: '10px', backgroundColor: '#f9f9f9', padding: '10px' }}>
+                {isEmployerReport ? (
+                  <>
+                    <p><strong>Company:</strong> {report.companyName}</p>
+                    <p><strong>Reporter:</strong> {report.reporterName}</p>
+                    <p><strong>Email:</strong> {report.reporterEmail}</p>
+                    <p><strong>Employer ID:</strong> {report.employerId}</p>
+                    <p><strong>Job ID:</strong> {report.jobId}</p>
+                    <p><strong>Details:</strong> {report.details}</p>
+                    <p><strong>Reason:</strong> {report.reason}</p>
+                    <p><strong>Created At:</strong> {report.createdAt.toDate().toString()}</p>
+                  </>
+                ) : (
+                  <>
+                    <p><strong>Applicant Name:</strong> {report.applicantName}</p>
+                    <p><strong>Email:</strong> {report.applicantEmail}</p>
+                    <p><strong>Applicant ID:</strong> {report.applicantId}</p>
+                    <p><strong>Reported By:</strong> {report.reportedBy}</p>
+                    <p><strong>Violation Type:</strong> {report.violationType}</p>
+                    <p><strong>Details:</strong> {report.details}</p>
+                    <p><strong>Reported At:</strong> {new Date(report.reportedAt).toString()}</p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })
+    )}
+  </div>
+)}
 
     </>
   );

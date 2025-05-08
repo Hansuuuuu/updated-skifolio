@@ -2253,14 +2253,14 @@ const EmployerProfile = () => {
                             </button>
                         </div>
                     </div>{showModal && selectedApplicant?.selectedCert && (
-  <ApplicantDetailsModal
-    cert={selectedApplicant.selectedCert}
-    onClose={() => {
-      setShowModal(false);
-      setSelectedApplicant(null);
-    }}
-  />
-)}
+                        <ApplicantDetailsModal
+                            cert={selectedApplicant.selectedCert}
+                            onClose={() => {
+                            setShowModal(false);
+                            setSelectedApplicant(null);
+                            }}
+                        />
+                        )}
 
                 </div>
             </div>
