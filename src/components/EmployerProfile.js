@@ -416,6 +416,113 @@ const EmployerProfile = () => {
     const [filterOrder, setFilterOrder] = useState("asc");
     const [showHiredApplicants, setShowHiredApplicants] = useState(false);
     const [showModal, setShowModal] = useState(false);
+    const [isHired, setUser] = useState()
+    
+
+
+
+
+    const handleRemoveHiredEmployee = async (hiredEmployee, jobId) => {
+        if (!hiredEmployee || !jobId) {
+            console.error("No employee or job selected");
+            return;
+        }
+    
+        const confirmRemove = window.confirm(`Are you sure you want to remove ${hiredEmployee.name} from hired employees?`);
+        
+        if (confirmRemove) {
+            try {
+                // Get the employer's company name
+                const employerRef = doc(db, "employers", auth.currentUser.uid);
+                const employerDoc = await getDoc(employerRef);
+                
+                if (!employerDoc.exists()) {
+                    console.error("Employer document not found");
+                    alert("Error: Employer profile not found");
+                    return;
+                }
+                
+                const employerData = employerDoc.data();
+                const companyName = employerData.companyName;
+                
+                if (!companyName) {
+                    console.error("Company name not found in employer data");
+                    alert("Error: Company name not found in your profile");
+                    return;
+                }
+                
+                // 1. Remove from the original hired subcollection
+                const originalHiredRef = doc(db, "employers", auth.currentUser.uid, "hired", jobId);
+                
+                // Get current hired applicants
+                const originalHiredDoc = await getDoc(originalHiredRef);
+                
+                if (originalHiredDoc.exists()) {
+                    const currentHired = originalHiredDoc.data().applicants || [];
+                    
+                    // Filter out the employee to remove
+                    const updatedHired = currentHired.filter(employee => employee.id !== hiredEmployee.id);
+                    
+                    // Update the document with filtered array
+                    if (updatedHired.length > 0) {
+                        await setDoc(originalHiredRef, { 
+                            applicants: updatedHired,
+                            jobId: jobId
+                        }, { merge: true });
+                    } else {
+                        // If no hired employees left, delete the document
+                        await deleteDoc(originalHiredRef);
+                    }
+                }
+                
+                // 2. Remove from the new company-based structure
+                const hiredEmployeeRef = doc(db, "companies", companyName, "jobs", jobId, "hired", hiredEmployee.id);
+                await deleteDoc(hiredEmployeeRef);
+                
+                // 3. Update local state
+                setHiredApplicants(prev => ({
+                    ...prev,
+                    [jobId]: (prev[jobId] || []).filter(emp => emp.id !== hiredEmployee.id)
+                }));
+                
+                alert(`${hiredEmployee.name} has been removed from hired employees.`);
+            } catch (error) {
+                console.error("Error removing hired employee:", error);
+                alert("Failed to remove hired employee. Please try again.");
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (selectedJob) {
+            fetchHiredEmployees(selectedJob);
+        }
+    }, [selectedJob]);
+
+    const fetchHiredEmployees = async (jobId) => {
+        if (!jobId) return;
+        
+        try {
+            const hiredRef = doc(db, "employers", auth.currentUser.uid, "hired", jobId);
+            const hiredDoc = await getDoc(hiredRef);
+            
+            if (hiredDoc.exists()) {
+                const hiredData = hiredDoc.data();
+                
+                setHiredApplicants(prev => ({
+                    ...prev,
+                    [jobId]: hiredData.applicants || []
+                }));
+            } else {
+                setHiredApplicants(prev => ({
+                    ...prev,
+                    [jobId]: []
+                }));
+            }
+        } catch (error) {
+            console.error("Error fetching hired employees:", error);
+        }
+    };
     
     const [editedData, setEditedData] = useState({
         industry: "",
@@ -765,8 +872,8 @@ const EmployerProfile = () => {
     //     }
     // };
     
-
-    const handleRejectApplicant = async () => {
+    // onClick={() => handleRemoveHiredEmployee(employee, selectedJob)}
+    const handleRejectApplicant = async (employee, selectedJob) => {
         if (!selectedApplicant || !selectedJob) {
             console.error("No applicant or job selected");
             return;
@@ -775,7 +882,13 @@ const EmployerProfile = () => {
         const confirmReject = window.confirm(`Are you sure you want to reject ${selectedApplicant.name}?`);
         if (confirmReject) {
             try {
-                // Delete from applications subcollection
+
+                if (isHired == true){
+                    handleRemoveHiredEmployee(employee, selectedJob)
+                    return;
+                }
+                else {
+                    // Delete from applications subcollection
                 await deleteDoc(doc(db, "jobs", selectedJob, "applications", selectedApplicant.id));
                 
                 // Update local state
@@ -786,12 +899,16 @@ const EmployerProfile = () => {
                 
                 alert(`${selectedApplicant.name} has been rejected.`);
                 setSelectedApplicant(null);
+                }
+                
             } catch (error) {
                 console.error("Error rejecting applicant:", error);
                 alert("Failed to reject applicant. Please try again.");
             }
         }
     };
+
+    
 
     const handleCloseJob = async (jobId) => {
         const confirmClose = window.confirm("Are you sure you want to close this job post? It will no longer be visible to applicants.");
@@ -1345,7 +1462,10 @@ const EmployerProfile = () => {
                                             flexWrap: "wrap" 
                                         }}>
                                             <button 
-                                                onClick={() => handleJobClick(job)}
+                                                onClick={() => {
+                                                    handleJobClick(job);
+                                                    setUser(false);
+                                                } }
                                                 style={{
                                                     padding: "8px 12px",
                                                     backgroundColor: selectedJob === job.id && !showHiredApplicants ? "#2c3e50" : "#3498db",
@@ -1359,7 +1479,10 @@ const EmployerProfile = () => {
                                                 View Applicants
                                             </button>
                                             <button 
-                                                onClick={() => toggleHiredApplicants(job.id)}
+                                                onClick={() => {
+                                                    toggleHiredApplicants(job.id);
+                                                    setUser(true);
+                                                  }}
                                                 style={{
                                                     padding: "8px 12px",
                                                     backgroundColor: showHiredApplicants && selectedJob === job.id ? "#2c3e50" : "#2ecc71",
@@ -2354,7 +2477,7 @@ const EmployerProfile = () => {
                             </button>
                             <button 
                                 className="reject-btn" 
-                                onClick={handleRejectApplicant}
+                                onClick={() => handleRejectApplicant(selectedApplicant, selectedJob)}
                                 style={{
                                     backgroundColor: '#e74c3c',
                                     color: '#fff',
@@ -2373,7 +2496,151 @@ const EmployerProfile = () => {
                                 <span style={{ marginRight: '8px' }}>❌</span> Reject Applicant
                             </button>
                         </div>
-                    </div>{showModal && selectedApplicant?.selectedCert && (
+                    </div>
+                    {/* <div style={{ 
+                            marginTop: '30px',
+                            backgroundColor: '#f0f9ff',
+                            borderRadius: '8px',
+                            padding: '20px',
+                            border: '1px solid #d1ecf1'
+                        }}>
+                            <h4 style={{
+                                margin: '0 0 15px 0',
+                                fontSize: '18px',
+                                fontWeight: '600',
+                                color: '#0c5460',
+                                display: 'flex',
+                                alignItems: 'center',
+                                borderBottom: '1px solid #bee5eb',
+                                paddingBottom: '10px'
+                            }}>
+                                <span style={{ marginRight: '10px' }}>👥</span> Hired Employees
+                            </h4>
+                            
+                            {hiredApplicants && hiredApplicants[selectedJob] && hiredApplicants[selectedJob].length > 0 ? (
+                                <div style={{ 
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                                    gap: '15px'
+                                }}>
+                                    {hiredApplicants[selectedJob].map(employee => (
+                                        <div key={employee.id} style={{ 
+                                            backgroundColor: '#fff',
+                                            borderRadius: '6px',
+                                            padding: '15px',
+                                            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                                            border: '1px solid #e3f2fd'
+                                        }}>
+                                            <div style={{ 
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                marginBottom: '10px'
+                                            }}>
+                                                <div style={{ marginRight: '10px' }}>
+                                                    {employee.profilePicURL ? (
+                                                        <img 
+                                                            src={employee.profilePicURL} 
+                                                            alt="Profile" 
+                                                            style={{ 
+                                                                width: '40px', 
+                                                                height: '40px', 
+                                                                borderRadius: '50%',
+                                                                objectFit: 'cover',
+                                                                border: '2px solid #3498db'
+                                                            }} 
+                                                        />
+                                                    ) : (
+                                                        <div style={{
+                                                            width: '40px',
+                                                            height: '40px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: '#3498db',
+                                                            display: 'flex',
+                                                            justifyContent: 'center',
+                                                            alignItems: 'center',
+                                                            color: '#fff',
+                                                            fontWeight: 'bold',
+                                                            fontSize: '16px'
+                                                        }}>
+                                                            {employee.name ? employee.name[0].toUpperCase() : 'A'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <div style={{
+                                                        fontWeight: '600',
+                                                        fontSize: '15px',
+                                                        color: '#333'
+                                                    }}>{employee.name}</div>
+                                                    <div style={{
+                                                        fontSize: '13px',
+                                                        color: '#666'
+                                                    }}>{employee.email}</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                marginTop: '10px',
+                                                gap: '8px'
+                                            }}>
+                                                <button 
+                                                    onClick={() => setSelectedApplicant(employee)}
+                                                    style={{
+                                                        backgroundColor: '#e3f2fd',
+                                                        color: '#1976d2',
+                                                        border: 'none',
+                                                        padding: '8px 12px',
+                                                        borderRadius: '4px',
+                                                        cursor: 'pointer',
+                                                        fontWeight: '500',
+                                                        fontSize: '13px',
+                                                        flex: '1',
+                                                        display: 'flex',
+                                                        justifyContent: 'center',
+                                                        alignItems: 'center'
+                                                    }}
+                                                >
+                                                    <span style={{ marginRight: '5px' }}>👁️</span> View
+                                                </button>
+                                                <button 
+                                                    onClick={() => HhandleRemoveiredEmployee(employee, selectedJob)}
+                                                    style={{
+                                                        backgroundColor: '#ffebee',
+                                                        color: '#d32f2f',
+                                                        border: 'none',
+                                                        padding: '8px 12px',
+                                                        borderRadius: '4px',
+                                                        cursor: 'pointer',
+                                                        fontWeight: '500',
+                                                        fontSize: '13px',
+                                                        flex: '1',
+                                                        display: 'flex',
+                                                        justifyContent: 'center',
+                                                        alignItems: 'center'
+                                                    }}
+                                                >
+                                                    <span style={{ marginRight: '5px' }}>✖️</span> Remove
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div style={{
+                                    padding: '15px',
+                                    textAlign: 'center',
+                                    color: '#777',
+                                    backgroundColor: '#f8f9fa',
+                                    borderRadius: '6px',
+                                    border: '1px dashed #dee2e6'
+                                }}>
+                                    No hired employees for this job position
+                                </div>
+                            )}
+                        </div> */}
+                    {showModal && selectedApplicant?.selectedCert && (
                         <ApplicantDetailsModal
                             cert={selectedApplicant.selectedCert}
                             onClose={() => {
