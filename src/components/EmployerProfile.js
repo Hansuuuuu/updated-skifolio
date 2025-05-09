@@ -396,7 +396,7 @@
 
 import React, { useState, useEffect } from "react";
 import { db, auth, storage } from "../firebase";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, deleteDoc, addDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, deleteDoc, addDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { onSnapshot } from "firebase/firestore";
 import "../styles.css";
@@ -597,52 +597,173 @@ const EmployerProfile = () => {
     };
 
     // New functions for requirements
-
     const handleHireApplicant = async () => {
-        if (!selectedApplicant || !selectedJob) {
-            console.error("No applicant or job selected");
+    if (!selectedApplicant || !selectedJob) {
+        console.error("No applicant or job selected");
+        return;
+    }
+
+    try {
+        // Get the employer's company name
+        const serverTimestamp = new Date().toISOString();
+        const employerRef = doc(db, "employers", auth.currentUser.uid);
+        const employerDoc = await getDoc(employerRef);
+        
+        if (!employerDoc.exists()) {
+            console.error("Employer document not found");
+            alert("Error: Employer profile not found");
             return;
         }
-    
-        try {
-            // Add to hired applicants subcollection
-            const hiredRef = doc(db, "employers", auth.currentUser.uid, "hired", selectedJob);
-            
-            // Get current hired applicants if they exist
-            const hiredDoc = await getDoc(hiredRef);
-            let currentHired = [];
-    
-            if (hiredDoc.exists()) {
-                currentHired = hiredDoc.data().applicants || [];
-            }
-    
-            // Check if applicant is already hired
-            if (!currentHired.some(app => app.id === selectedApplicant.id)) {
-                currentHired.push(selectedApplicant);
-    
-                // Update Firestore: Add to 'hired'
-                await setDoc(hiredRef, { applicants: currentHired }, { merge: true });
-    
-                // ✅ Delete applicant from jobs/{jobId}/applications
-                const applicantRef = doc(db, "jobs", selectedJob, "applications", selectedApplicant.id);
-                await deleteDoc(applicantRef);
-    
-                // Update local state
-                setHiredApplicants(prev => ({
-                    ...prev,
-                    [selectedJob]: [...(prev[selectedJob] || []), selectedApplicant]
-                }));
-    
-                alert(`${selectedApplicant.name} has been hired!`);
-                setSelectedApplicant(null);
-            } else {
-                alert("This applicant has already been hired!");
-            }
-        } catch (error) {
-            console.error("Error hiring applicant:", error);
-            alert("Failed to hire applicant. Please try again.");
+        
+        const employerData = employerDoc.data();
+        const companyName = employerData.companyName;
+        
+        if (!companyName) {
+            console.error("Company name not found in employer data");
+            alert("Error: Company name not found in your profile");
+            return;
         }
-    };
+        
+        // 1. Add to the original hired subcollection (for backward compatibility)
+        const originalHiredRef = doc(db, "employers", auth.currentUser.uid, "hired", selectedJob);
+        
+        // Get current hired applicants if they exist
+        const originalHiredDoc = await getDoc(originalHiredRef);
+        let currentHired = [];
+
+        if (originalHiredDoc.exists()) {
+            currentHired = originalHiredDoc.data().applicants || [];
+        }
+
+        // Check if applicant is already hired
+        if (!currentHired.some(app => app.id === selectedApplicant.id)) {
+            // Add applicant to the hired list
+            currentHired.push(selectedApplicant);
+
+            // Update original Firestore location
+            await setDoc(originalHiredRef, { 
+                applicants: currentHired,
+                jobId: selectedJob
+            }, { merge: true });
+            
+            // 2. Now add to the new company-based structure
+            // First, ensure the company document exists
+            const companyDocRef = doc(db, "companies", companyName);
+            const companyDoc = await getDoc(companyDocRef);
+            
+            if (!companyDoc.exists()) {
+                // Create the company document if it doesn't exist
+                await setDoc(companyDocRef, {
+                    companyName: companyName,
+                    employerId: auth.currentUser.uid,
+                    createdAt: serverTimestamp
+                });
+            }
+            
+            // Ensure the job document exists under this company
+            const jobInCompanyRef = doc(db, "companies", companyName, "jobs", selectedJob);
+            const jobInCompanyDoc = await getDoc(jobInCompanyRef);
+            
+            if (!jobInCompanyDoc.exists()) {
+                // Get job data from the jobs collection
+                const jobRef = doc(db, "jobs", selectedJob);
+                const jobDoc = await getDoc(jobRef);
+                
+                if (jobDoc.exists()) {
+                    // Add job to the company's jobs collection
+                    await setDoc(jobInCompanyRef, {
+                        ...jobDoc.data(),
+                        companyName: companyName,
+                        employerId: auth.currentUser.uid,
+                        updatedAt: serverTimestamp
+                    });
+                } else {
+                    // If job doesn't exist, create a minimal entry
+                    await setDoc(jobInCompanyRef, {
+                        id: selectedJob,
+                        companyName: companyName,
+                        employerId: auth.currentUser.uid,
+                        createdAt: serverTimestamp()
+                    });
+                }
+            }
+            
+            // Add the applicant to the hired subcollection under the job
+            const hiredApplicantRef = doc(db, "companies", companyName, "jobs", selectedJob, "hired", selectedApplicant.id);
+            
+            await setDoc(hiredApplicantRef, {
+                ...selectedApplicant,
+                jobId: selectedJob,
+                companyName: companyName,
+                employerId: auth.currentUser.uid,
+                hiredAt: serverTimestamp
+            });
+
+            // 3. Delete applicant from jobs/{jobId}/applications
+            const applicantRef = doc(db, "jobs", selectedJob, "applications", selectedApplicant.id);
+            await deleteDoc(applicantRef);
+
+            // 4. Update local state
+            setHiredApplicants(prev => ({
+                ...prev,
+                [selectedJob]: [...(prev[selectedJob] || []), selectedApplicant]
+            }));
+
+            alert(`${selectedApplicant.name} has been hired!`);
+            setSelectedApplicant(null);
+        } else {
+            alert("This applicant has already been hired!");
+        }
+    } catch (error) {
+        console.error("Error hiring applicant:", error);
+        alert("Failed to hire applicant. Please try again.");
+    }
+};
+    // const handleHireApplicant = async () => {
+    //     if (!selectedApplicant || !selectedJob) {
+    //         console.error("No applicant or job selected");
+    //         return;
+    //     }
+    
+    //     try {
+    //         // Add to hired applicants subcollection
+    //         const hiredRef = doc(db, "employers", auth.currentUser.uid, "hired", selectedJob);
+            
+    //         // Get current hired applicants if they exist
+    //         const hiredDoc = await getDoc(hiredRef);
+    //         let currentHired = [];
+    
+    //         if (hiredDoc.exists()) {
+    //             currentHired = hiredDoc.data().applicants || [];
+    //         }
+    
+    //         // Check if applicant is already hired
+    //         if (!currentHired.some(app => app.id === selectedApplicant.id)) {
+    //             currentHired.push(selectedApplicant);
+    
+    //             // Update Firestore: Add to 'hired'
+    //             await setDoc(hiredRef, { applicants: currentHired }, { merge: true });
+    
+    //             // ✅ Delete applicant from jobs/{jobId}/applications
+    //             const applicantRef = doc(db, "jobs", selectedJob, "applications", selectedApplicant.id);
+    //             await deleteDoc(applicantRef);
+    
+    //             // Update local state
+    //             setHiredApplicants(prev => ({
+    //                 ...prev,
+    //                 [selectedJob]: [...(prev[selectedJob] || []), selectedApplicant]
+    //             }));
+    
+    //             alert(`${selectedApplicant.name} has been hired!`);
+    //             setSelectedApplicant(null);
+    //         } else {
+    //             alert("This applicant has already been hired!");
+    //         }
+    //     } catch (error) {
+    //         console.error("Error hiring applicant:", error);
+    //         alert("Failed to hire applicant. Please try again.");
+    //     }
+    // };
     
 
     const handleRejectApplicant = async () => {
