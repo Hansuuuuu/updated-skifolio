@@ -2490,7 +2490,7 @@
 // // </div>
 import React, { useState, useEffect } from "react";
 import { db, storage } from "../firebase";
-import { collection,collectionGroup, getDocs, getDoc, query, where } from "firebase/firestore";
+import { collection,collectionGroup, getDocs, getDoc, query, where,updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import emailjs from "emailjs-com"; // or "@emailjs/browser" depending on your setup
 
@@ -2500,6 +2500,7 @@ import {
   deleteDoc,
   doc,
   addDoc,
+  serverTimestamp
 } from "firebase/firestore";
 import { writeBatch } from "firebase/firestore"; // Import writeBatch
 import { setDoc} from "firebase/firestore";
@@ -2531,7 +2532,9 @@ const AdminPage = () => {
   const [showDashboard, setShowDashboard] = useState(true); // Show Dashboard by default
   const [hiredJobData, setHiredJobData] = useState([]);
   const [showhired, showHiredJobData] = useState(false);
-
+  const [selectedDeletedFile, setSelectedDeletedFile] = useState(null);
+  const [showDataModal, setShowDataModal] = useState(false);
+  const [jobsApproved, setjobsApproved] = useState(false);
   // const [announcements, setAnnouncements] = useState([]);
   // const [newAnnouncement, setNewAnnouncement] = useState('');
   const [activeTab, setActiveTab] = useState('manageUsers');
@@ -2618,37 +2621,167 @@ const AdminPage = () => {
   
   //   fetchUserApplications();
   // }, [selectedUser]);
+// useEffect(() => {
+//   if (!selectedUser?.name) return;
+
+//   const fetchUserApplications = async () => {
+//     setIsLoading(true);
+//     setError(null);
+
+//     try {
+//       const currentUserName = selectedUser.name;
+//       const userId = selectedUser.userId || selectedUser.id;
+
+//       const tempAppliedJobs = [];
+//       const tempHiredJobs = [];
+//       const jobDataCache = {};
+
+//       // Fetch all jobs
+//       const jobsSnapshot = await getDocs(collection(db, "jobs"));
+//       const jobDocs = jobsSnapshot.docs;
+
+//       // Prepare all application and job fetches in parallel
+//       const jobFetches = jobDocs.map(async (jobDoc) => {
+//         const jobId = jobDoc.id;
+//         const jobData = jobDoc.data();
+//         jobDataCache[jobId] = jobData;
+
+//         const applicationsRef = collection(db, "jobs", jobId, "applications");
+//         const applicationsSnap = await getDocs(applicationsRef);
+
+//         for (const appDoc of applicationsSnap.docs) {
+//           const appData = appDoc.data();
+
+//           if (appData.name === currentUserName) {
+//             tempAppliedJobs.push({
+//               id: jobId,
+//               title: jobData.title || "Untitled Job",
+//               companyName: jobData.companyName || "Tech-Innovators.inc",
+//               location: jobData.location || "No location specified",
+//               appliedAt: appData.appliedAt || new Date(),
+//               status: appData.status || "applied",
+//               applicantId: appData.userId || appData.id,
+//             });
+//             break;
+//           }
+//         }
+//       });
+
+//       await Promise.all(jobFetches);
+
+//       // Fetch from user profile appliedJobs if not already included
+//       if (Array.isArray(selectedUser.appliedJobs)) {
+//         for (const appliedJob of selectedUser.appliedJobs) {
+//           const jobId = appliedJob.id || appliedJob.jobId;
+//           if (
+//             jobId &&
+//             !tempAppliedJobs.some((job) => job.id === jobId) &&
+//             !tempHiredJobs.some((job) => job.id === jobId)
+//           ) {
+//             let jobData = jobDataCache[jobId];
+//             if (!jobData) {
+//               const jobDoc = await getDoc(doc(db, "jobs", jobId));
+//               if (jobDoc.exists()) jobData = jobDoc.data();
+//               jobDataCache[jobId] = jobData;
+//             }
+
+//             if (jobData) {
+//               tempAppliedJobs.push({
+//                 id: jobId,
+//                 title: jobData.title || "Untitled Job",
+//                 companyName: jobData.companyName || "Tech-Innovators.inc",
+//                 location: jobData.location || "No location specified",
+//                 appliedAt: appliedJob.appliedAt || new Date(),
+//                 status: "applied",
+//                 applicantId: userId,
+//               });
+//             }
+//           }
+//         }
+//       }
+
+//       // Optional: check hired jobs only if no result yet
+//       if (tempHiredJobs.length === 0) {
+//         const employersSnapshot = await getDocs(collection(db, "employers"));
+
+//         const hiredFetches = employersSnapshot.docs.map(async (employerDoc) => {
+//           const employerId = employerDoc.id;
+//           const hiredRef = collection(db, "employers", employerId, "hired");
+//           const hiredSnapshot = await getDocs(hiredRef);
+
+//           for (const hiredDoc of hiredSnapshot.docs) {
+//             const hiredData = hiredDoc.data();
+//             const jobId = hiredDoc.id;
+
+//             const userApplicant = hiredData.applicants?.find(
+//               (applicant) => applicant.name === currentUserName
+//             );
+
+//             if (userApplicant) {
+//               let jobData = jobDataCache[jobId];
+//               if (!jobData) {
+//                 const jobDoc = await getDoc(doc(db, "jobs", jobId));
+//                 if (jobDoc.exists()) jobData = jobDoc.data();
+//                 jobDataCache[jobId] = jobData;
+//               }
+
+//               tempHiredJobs.push({
+//                 id: jobId,
+//                 title: jobData?.title || "Untitled Job",
+//                 companyName: jobData?.companyName || "Tech-Innovators.inc",
+//                 location: jobData?.location || "No location specified",
+//                 appliedAt: userApplicant.appliedAt || new Date(),
+//                 status: "hired",
+//                 applicantId: userApplicant.id || userApplicant.userId || userId,
+//               });
+//             }
+//           }
+//         });
+
+//         await Promise.all(hiredFetches);
+//       }
+
+//       setAppliedJobs(tempAppliedJobs);
+//       setHiredJobs(tempHiredJobs);
+//     } catch (error) {
+//       console.error("Error fetching user applications:", error);
+//       setError("Failed to load job applications.");
+//     } finally {
+//       setIsLoading(false);
+//     }
+//   };
+
+//   fetchUserApplications();
+// }, [selectedUser]);
 useEffect(() => {
   if (!selectedUser?.name) return;
-
+  
   const fetchUserApplications = async () => {
     setIsLoading(true);
     setError(null);
-
+    
     try {
       const currentUserName = selectedUser.name;
       const userId = selectedUser.userId || selectedUser.id;
-
       const tempAppliedJobs = [];
       const tempHiredJobs = [];
       const jobDataCache = {};
-
+      
       // Fetch all jobs
       const jobsSnapshot = await getDocs(collection(db, "jobs"));
       const jobDocs = jobsSnapshot.docs;
-
+      
       // Prepare all application and job fetches in parallel
       const jobFetches = jobDocs.map(async (jobDoc) => {
         const jobId = jobDoc.id;
         const jobData = jobDoc.data();
         jobDataCache[jobId] = jobData;
-
+        
         const applicationsRef = collection(db, "jobs", jobId, "applications");
         const applicationsSnap = await getDocs(applicationsRef);
-
+        
         for (const appDoc of applicationsSnap.docs) {
           const appData = appDoc.data();
-
           if (appData.name === currentUserName) {
             tempAppliedJobs.push({
               id: jobId,
@@ -2663,9 +2796,9 @@ useEffect(() => {
           }
         }
       });
-
+      
       await Promise.all(jobFetches);
-
+      
       // Fetch from user profile appliedJobs if not already included
       if (Array.isArray(selectedUser.appliedJobs)) {
         for (const appliedJob of selectedUser.appliedJobs) {
@@ -2681,7 +2814,6 @@ useEffect(() => {
               if (jobDoc.exists()) jobData = jobDoc.data();
               jobDataCache[jobId] = jobData;
             }
-
             if (jobData) {
               tempAppliedJobs.push({
                 id: jobId,
@@ -2696,50 +2828,106 @@ useEffect(() => {
           }
         }
       }
-
-      // Optional: check hired jobs only if no result yet
+      
+      // Check for hired jobs - UPDATED for new structure
       if (tempHiredJobs.length === 0) {
-        const employersSnapshot = await getDocs(collection(db, "employers"));
-
-        const hiredFetches = employersSnapshot.docs.map(async (employerDoc) => {
-          const employerId = employerDoc.id;
-          const hiredRef = collection(db, "employers", employerId, "hired");
-          const hiredSnapshot = await getDocs(hiredRef);
-
-          for (const hiredDoc of hiredSnapshot.docs) {
-            const hiredData = hiredDoc.data();
-            const jobId = hiredDoc.id;
-
-            const userApplicant = hiredData.applicants?.find(
-              (applicant) => applicant.name === currentUserName
-            );
-
-            if (userApplicant) {
-              let jobData = jobDataCache[jobId];
-              if (!jobData) {
-                const jobDoc = await getDoc(doc(db, "jobs", jobId));
-                if (jobDoc.exists()) jobData = jobDoc.data();
-                jobDataCache[jobId] = jobData;
-              }
-
-              tempHiredJobs.push({
-                id: jobId,
-                title: jobData?.title || "Untitled Job",
-                companyName: jobData?.companyName || "Tech-Innovators.inc",
-                location: jobData?.location || "No location specified",
-                appliedAt: userApplicant.appliedAt || new Date(),
-                status: "hired",
-                applicantId: userApplicant.id || userApplicant.userId || userId,
-              });
+        // Get all companies
+        const companiesSnapshot = await getDocs(collection(db, "companies"));
+        
+        // Process each company
+        const companyFetches = companiesSnapshot.docs.map(async (companyDoc) => {
+          const companyName = companyDoc.id;
+          const companyData = companyDoc.data();
+          
+          // Get all jobs for this company
+          const companyJobsRef = collection(db, "companies", companyName, "jobs");
+          const companyJobsSnapshot = await getDocs(companyJobsRef);
+          
+          // Process each job
+          const jobFetches = companyJobsSnapshot.docs.map(async (jobDoc) => {
+            const jobId = jobDoc.id;
+            const jobData = jobDoc.data();
+            
+            // Store job data in cache if not already there
+            if (!jobDataCache[jobId]) {
+              jobDataCache[jobId] = jobData;
             }
-          }
+            
+            // Get all hired applicants for this job
+            const hiredRef = collection(db, "companies", companyName, "jobs", jobId, "hired");
+            const hiredSnapshot = await getDocs(hiredRef);
+            
+            // Check each hired applicant
+            for (const hiredDoc of hiredSnapshot.docs) {
+              const hiredData = hiredDoc.data();
+              
+              // Check if this is our user
+              if (hiredData.name === currentUserName) {
+                tempHiredJobs.push({
+                  id: jobId,
+                  title: jobDataCache[jobId]?.title || jobData?.title || "Untitled Job",
+                  companyName: companyName || jobData?.companyName || "Tech-Innovators.inc",
+                  location: jobData?.location || "No location specified",
+                  appliedAt: hiredData.appliedAt || hiredData.hiredAt || new Date(),
+                  status: "hired",
+                  applicantId: hiredDoc.id || hiredData.id || userId,
+                });
+                break;  // Found the user for this job, no need to check other hired docs
+              }
+            }
+          });
+          
+          await Promise.all(jobFetches);
         });
-
-        await Promise.all(hiredFetches);
+        
+        await Promise.all(companyFetches);
+        
+        // FALLBACK: Only if we didn't find any hired jobs in the new structure,
+        // check the legacy structure for backward compatibility
+        if (tempHiredJobs.length === 0) {
+          console.log("No hired jobs found in new structure, checking legacy structure");
+          
+          const employersSnapshot = await getDocs(collection(db, "employers"));
+          const hiredFetches = employersSnapshot.docs.map(async (employerDoc) => {
+            const employerId = employerDoc.id;
+            const hiredRef = collection(db, "employers", employerId, "hired");
+            const hiredSnapshot = await getDocs(hiredRef);
+            
+            for (const hiredDoc of hiredSnapshot.docs) {
+              const hiredData = hiredDoc.data();
+              const jobId = hiredDoc.id;
+              const userApplicant = hiredData.applicants?.find(
+                (applicant) => applicant.name === currentUserName
+              );
+              
+              if (userApplicant) {
+                let jobData = jobDataCache[jobId];
+                if (!jobData) {
+                  const jobDoc = await getDoc(doc(db, "jobs", jobId));
+                  if (jobDoc.exists()) jobData = jobDoc.data();
+                  jobDataCache[jobId] = jobData;
+                }
+                
+                tempHiredJobs.push({
+                  id: jobId,
+                  title: jobData?.title || "Untitled Job",
+                  companyName: jobData?.companyName || "Tech-Innovators.inc",
+                  location: jobData?.location || "No location specified",
+                  appliedAt: userApplicant.appliedAt || new Date(),
+                  status: "hired",
+                  applicantId: userApplicant.id || userApplicant.userId || userId,
+                });
+              }
+            }
+          });
+          
+          await Promise.all(hiredFetches);
+        }
       }
-
+      
       setAppliedJobs(tempAppliedJobs);
       setHiredJobs(tempHiredJobs);
+      
     } catch (error) {
       console.error("Error fetching user applications:", error);
       setError("Failed to load job applications.");
@@ -2747,10 +2935,9 @@ useEffect(() => {
       setIsLoading(false);
     }
   };
-
+  
   fetchUserApplications();
 }, [selectedUser]);
-
   
   const addHistoryRecord = async (event, details) => {
     const timestamp = new Date().toISOString(); // Get current timestamp
@@ -3060,7 +3247,7 @@ const handleApproveUser = async (user) => {
 console.log("Email:", user.email);
 
     // Prepare email template parameters
-    emailjs.init("bWFWZMuU0I3Ok35gl"); // Replace with your actual EmailJS public key
+    emailjs.init("1hCXoeKVFq8hm9LEx"); // Replace with your actual EmailJS public key
     const templateParams = {
       email: user.email,
       html: `
@@ -3096,8 +3283,9 @@ console.log("Email:", user.email);
 
     // Send the email using EmailJS
     const response = await emailjs.send(
-      "service_mu4w5ko", // Your EmailJS service ID
-      "template_g72ruh8", // Your EmailJS template ID
+      // "service_mu4w5ko", // Your EmailJS service ID
+      "service_i0d7mwo",
+      "template_23g6ezo", // Your EmailJS template ID
       templateParams
     );
 
@@ -3129,27 +3317,28 @@ console.log("Email:", user.email);
 // Reject User
 const handleRejectUser = async (user) => {
     try {
-        // Move user data to the `deletedFiles` collection
-        await setDoc(doc(db, "deletedFiles", user.id), user);
+        const userId = user.id;
+        const deletedUserRef = doc(db, "deletedFiles", `rejected-user-${userId}`);
 
+        await setDoc(deletedUserRef, {
+            originalPath: `userAccountsToBeApproved/${userId}`,
+            userData: user,
+            deletedAt: serverTimestamp(),
+            userId: userId
+        });
 
-        // Remove user from the approval collection
-        await deleteDoc(doc(db, "userAccountsToBeApproved", user.id));
+        await deleteDoc(doc(db, "userAccountsToBeApproved", userId));
 
-
-        // Update local state
-        setUsersToApprove(usersToApprove.filter((u) => u.id !== user.id));
+        setUsersToApprove(usersToApprove.filter((u) => u.id !== userId));
         alert("User rejected and moved to deleted files.");
 
-
-        await addHistoryRecord('User Rejected', `User ${user.id} rejected.`); // Add history record with timestamp
-
-
+        await addHistoryRecord('User Rejected', `User ${user.username || userId} rejected.`);
     } catch (error) {
         console.error("Error rejecting user:", error);
         alert("Failed to reject user. Please try again.");
     }
 };
+
 
 
   // Fetch Employers
@@ -3233,39 +3422,53 @@ const handleRejectUser = async (user) => {
     const applicants = applicantsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     setJobApplicants(applicants);
   };
-  const handleHiredClick = async (job) => {
-    console.log("Received job object:", job);
-  
-    if (!job || !job.employerId) {
-      console.error("Missing job or employerId");
+const handleHiredClick = async (job) => {
+  console.log("Received job object:", job);
+
+  if (!job || !job.companyName) {
+    console.error("Missing job or company name");
+    return;
+  }
+
+  setSelectedJob(job);
+  setViewingHired(true);
+
+  try {
+    // Get the company name (previously we were using employerId incorrectly as the company name)
+    const companyName = job.companyName;
+    
+    // Access the hired subcollection under the specific job
+    const hiredApplicantsRef = collection(
+      db, 
+      "companies", 
+      companyName,
+      "jobs",
+      job.id,
+      "hired"
+    );
+    
+    const hiredApplicantsSnapshot = await getDocs(hiredApplicantsRef);
+    
+    if (hiredApplicantsSnapshot.empty) {
+      console.log("No hired applicants found for this job");
+      setHiredJobData([]);
       return;
     }
-  
-    setSelectedJob(job);
-    setViewingHired(true);
-  
-    try {
-      const hiredJobsRef = collection(db, "employers", job.employerId, "hired");
-      const hiredJobsSnapshot = await getDocs(hiredJobsRef);
-      const allHiredJobs = hiredJobsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-  
-      const matched = allHiredJobs.find((h) => h.id === job.id);
-  
-      if (!matched || !matched.applicants) {
-        setHiredJobData([]);
-        return;
-      }
-  
-      console.log("Setting hiredJobData to applicants:", matched.applicants);
-      setHiredJobData(matched.applicants); // ✅ Set directly to array
-  
-    } catch (error) {
-      console.error("Error fetching hired jobs:", error);
-    }
-  };
+    
+    // Map the documents to array of applicant data
+    const hiredApplicants = hiredApplicantsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log("Setting hiredJobData to applicants:", hiredApplicants);
+    setHiredJobData(hiredApplicants);
+
+  } catch (error) {
+    console.error("Error fetching hired applicants:", error);
+    setHiredJobData([]);
+  }
+};
   
   
   
@@ -3362,6 +3565,7 @@ const handleApplicantClick = (applicant) => {
     setIsApplicant(true)
   }
 };
+
 const openHiredModal = (jobData) => {
   // Make sure to load hired job data separately 
   // Load your data here, e.g., from an API call or your data source
@@ -3372,6 +3576,65 @@ const openHiredModal = (jobData) => {
   
   // IMPORTANT: Do not set selectedJob when opening hired modal
 };
+    const handleDeleteJob = async (jobId) => {
+        const confirmDelete = window.confirm("Are you sure you want to delete this job post?");
+        if (confirmDelete) {
+    // Get reference to the job document
+    const jobRef = doc(db, "jobs", jobId);
+    
+    // Get the current job data before deleting
+    const jobSnapshot = await getDoc(jobRef);
+    
+    if (jobSnapshot.exists()) {
+        // Save the job data to deletedFiles collection
+        await setDoc(doc(db, "deletedFiles", `deleted-job-${jobId}`), {
+            originalPath: `jobs/${jobId}`,
+            jobData: jobSnapshot.data(),
+            deletedAt: serverTimestamp(),
+            jobId: jobId
+        });
+        
+        // Now delete the original job document
+        await deleteDoc(jobRef);
+        setEmployerJobs((prev) => prev.filter((job) => job.id !== jobId));
+        alert("Job post deleted successfully!");
+    } else {
+        console.error("Job document doesn't exist, cannot backup before deletion");
+        alert("Error: Could not find job to delete");
+    }
+}
+    };
+     const handleToggleUserStatus = async (userId, disableStatus) => {
+    try {
+      // Determine the correct collection based on user type
+      const collectionName = selectedUserType === "Applicants" ? "applicants" : "employers";
+      
+      // Log the action for debugging
+      console.log(`Updating user ${userId} in collection ${collectionName} with disabled status: ${disableStatus}`);
+      
+      // Reference to the user document
+      const userRef = doc(db, collectionName, userId);
+      
+      // Update the disabled status
+      await updateDoc(userRef, {
+        disabled: disableStatus
+      });
+      
+      // Update the local state to reflect changes immediately
+      setSelectedUser(prev => ({
+        ...prev,
+        disabled: disableStatus
+      }));
+      
+      // Show success notification to admin
+      alert(`User account has been ${disableStatus ? "disabled" : "enabled"} successfully.`);
+      
+    } catch (error) {
+      console.error("Error updating user status:", error);
+      alert(`Failed to ${disableStatus ? "disable" : "enable"} user account. Please try again: ${error.message}`);
+    }
+  };
+
 
 const handleHiredApplicantClick = (applicant) => {
   if (selectedHiredApplicant && selectedHiredApplicant.name === applicant.name) {
@@ -3402,31 +3665,58 @@ const handleHiredApplicantClick = (applicant) => {
   const handleOpenHiredModal = () => {
     showHiredJobData(false);
   };
-  const handlePublishJob = async (job) => {
-    try {
-      // Add job to the 'jobs' collection
-      await setDoc(doc(db, "jobs", job.id), job);
+const handlePublishJob = async (job) => {
+  try {
+    // Add job to the 'jobs' collection with status set to 'open'
+    const updatedJob = { ...job, status: "open" };
+    await setDoc(doc(db, "jobs", job.id), updatedJob);
 
+    // Update local jobs state
+    setJobs(prev =>
+      prev.map(j =>
+        j.id === job.id ? updatedJob : j
+      )
+    );
 
-      // Delete job from 'jobs-to-be-approved'
-      await deleteDoc(doc(db, "jobs-to-be-approved", job.id));
+    // Delete job from 'jobs-to-be-approved'
+    await deleteDoc(doc(db, "jobs-to-be-approved", job.id));
 
+    // Update local state for pending jobs and selection
+    setPendingJobs(prev => prev.filter(j => j.id !== job.id));
+    setSelectedJob(null);
+    
+    // Log success and add to history
+    alert("Job published successfully.");
+    const employerId = job.employerId; // Target employer ID
 
-      // Update local state
-      setPendingJobs(pendingJobs.filter((j) => j.id !== job.id));
-      setSelectedJob(null);
-      alert("Job published successfully.");
+      const emailContent = `
+        Your Job Named ${job.title} have been approved
+      `;
+      const emailSubject = `
+        Job Approval
+      `;
 
+      const timestamp = Date.now();
+      const notificationsRef = collection(db, `employers/${employerId}/notifications`);
+      const docId = `notification_${timestamp}`;
 
-      await addHistoryRecord('Job Published', `Job post #${job.id} published.`); // Add history record with timestamp
+      const newNotification = {
+        subject: emailSubject,
+        message: emailContent,
+        timestamp: new Date(),
+        status: "unread",
+      };
 
+      await setDoc(doc(notificationsRef, docId), newNotification);
+    await addHistoryRecord('Job Published', `Job post #${job.id} published.`);
 
-    } catch (error) {
-      console.error("Error publishing job:", error);
-      alert("Failed to publish job. Please try again.");
-    }
-  };
-  const handleRejectJob = async (jobId) => {
+  } catch (error) {
+    console.error("Error publishing job:", error);
+    alert("Failed to publish job. Please try again.");
+  }
+};
+
+  const handleRejectJob = async (jobId,job) => {
     try {
       setIsApplicant(true)
       // Delete job from 'jobs-to-be-approved'
@@ -3437,8 +3727,28 @@ const handleHiredApplicantClick = (applicant) => {
       setPendingJobs(pendingJobs.filter((j) => j.id !== jobId));
       setSelectedJob(null);
       alert("Job rejected successfully.");
+      
+      const employerId = job.employerId; // Target employer ID
 
+      const emailContent = `
+        Your Job Named ${job.title} have been disapproved. Please read our terms for uploading jobs in the FAQ window
+      `;
+      const emailSubject = `
+        Job Approval
+      `;
 
+      const timestamp = Date.now();
+      const notificationsRef = collection(db, `employers/${employerId}/notifications`);
+      const docId = `notification_${timestamp}`;
+
+      const newNotification = {
+        subject: emailSubject,
+        message: emailContent,
+        timestamp: new Date(),
+        status: "unread",
+      };
+
+      await setDoc(doc(notificationsRef, docId), newNotification);
       await addHistoryRecord('Job Post Rejected',  `Job post #${jobId} rejected.` );
     } catch (error) {
       console.error("Error rejecting job:", error);
@@ -3693,6 +4003,7 @@ const handleHiredApplicantClick = (applicant) => {
         setShowAnnouncement(false);
         setViewingReport(false);
         setShowApplicant(true);
+        setjobsApproved(false);
       }}
       style={{
         display: "block",
@@ -3763,7 +4074,12 @@ const handleHiredApplicantClick = (applicant) => {
 
 
     <button
-      onClick={handleToggleClass}
+      onClick={() => {
+        handleToggleClass();
+        setjobsApproved(true);
+      }}
+
+      
       style={{
         display: "block",
         width: "100%",
@@ -4045,224 +4361,247 @@ const handleHiredApplicantClick = (applicant) => {
       {/* Detailed Applicant Modal */}
 
 
-      {selectedUser && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fff",
-              padding: "20px",
-              borderRadius: "5px",
-              maxWidth: "600px",
-              width: "90%",
-              maxHeight: "80%",
-              overflowY: "auto",
-            }}
-          >
-            <h4>{selectedUserType === "Applicants" ? "Applicant Details" : ("Employer Details" && selectedUserType !== "JobsToBeApproved")}</h4>
+       {selectedUser && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(0, 0, 0, 0.5)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+    }}
+  >
+    <div
+      style={{
+        backgroundColor: "#fff",
+        padding: "20px",
+        borderRadius: "5px",
+        maxWidth: "600px",
+        width: "90%",
+        maxHeight: "80%",
+        overflowY: "auto",
+      }}
+    >
+      <h4>{selectedUserType === "Applicants" ? "Applicant Details" : ("Employer Details" && selectedUserType !== "JobsToBeApproved")}</h4>
 
 
-            {selectedUserType === "Applicants" && !isUserClassVisible ? (
-  <>
-
-    <div>
-      <img
-        src={selectedUser.profilePicURL}
-        alt={`${selectedUser.name}'s Profile`}
-        style={{ width: "150px", borderRadius: "50%" }}
-      />
-      <p><strong>Name:</strong> {selectedUser.name}</p>
-      <p><strong>Email:</strong> {selectedUser.email}</p>
-      <p><strong>Experience:</strong> {selectedUser.experience}</p>
-      <p><strong>GitHub:</strong> <a href={selectedUser.githubRepo} target="_blank" rel="noopener noreferrer">{selectedUser.githubRepo}</a></p>
-
-      <h3>Selected Jobs</h3>
-      <ul>
-        {selectedUser.selectedJobs?.map((job, index) => (
-          <li key={index}>{job}</li>
-        ))}
-      </ul>
-
-      <h3>Skills</h3>
-      <ul>
-        {Object.entries(selectedUser.skills || {}).map(([skill, hasSkill]) => (
-          hasSkill ? <li key={skill}>{skill}</li> : null
-        ))}
-      </ul>
-
-      <h3>Certifications</h3>
-
-      {Object.entries(selectedUser.certifications || {}).map(([category, certArray]) => (
-        <div key={category}>
-          <h4>{category}</h4>
-          {certArray.length === 0 ? (
-            <p>No certifications.</p>
-          ) : (
-            certArray.map((cert, index) => (
-              <div key={index} style={{ border: "1px solid #ccc", padding: "10px", marginBottom: "10px" }}>
-                <img src={cert.imageURL} alt={cert.name} style={{ width: "200px" }} />
-                <p><strong>Name:</strong> {cert.name}</p>
-                <p><strong>Issuer:</strong> {cert.issuer}</p>
-                <p><strong>Issue Date:</strong> {cert.issueDate}</p>
-                <p><strong>Expiry Date:</strong> {cert.expiryDate}</p>
-                <p><strong>Credential ID:</strong> {cert.credentialID}</p>
-              </div>
-            ))
-          )}
-        </div>
-      ))}
-
-      {selectedUser.submissions && selectedUser.submissions.length > 0 && (
+      {selectedUserType === "Applicants" && !isUserClassVisible ? (
         <>
-          <h5>Submissions</h5>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <img
+                src={selectedUser.profilePicURL}
+                alt={`${selectedUser.name}'s Profile`}
+                style={{ width: "150px", borderRadius: "50%" }}
+              />
+              <div>
+                <p style={{ color: selectedUser.disabled ? "red" : "green", fontWeight: "bold" }}>
+                  Account Status: {selectedUser.disabled ? "Disabled" : "Active"}
+                </p>
+                <button
+                  onClick={() => handleToggleUserStatus(selectedUser.id, !selectedUser.disabled)}
+                  style={{
+                    padding: "5px 10px",
+                    backgroundColor: selectedUser.disabled ? "#28a745" : "#dc3545",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "5px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {selectedUser.disabled ? "Enable Account" : "Disable Account"}
+                </button>
+              </div>
+            </div>
+            <p><strong>Name:</strong> {selectedUser.name}</p>
+            <p><strong>Email:</strong> {selectedUser.email}</p>
+            <p><strong>Experience:</strong> {selectedUser.experience}</p>
+            <p><strong>GitHub:</strong> <a href={selectedUser.githubRepo} target="_blank" rel="noopener noreferrer">{selectedUser.githubRepo}</a></p>
+
+            <h3>Selected Jobs</h3>
+            <ul>
+              {selectedUser.selectedJobs?.map((job, index) => (
+                <li key={index}>{job}</li>
+              ))}
+            </ul>
+
+            <h3>Skills</h3>
+            <ul>
+              {Object.entries(selectedUser.skills || {}).map(([skill, hasSkill]) => (
+                hasSkill ? <li key={skill}>{skill}</li> : null
+              ))}
+            </ul>
+
+            <h3>Certifications</h3>
+
+            {Object.entries(selectedUser.certifications || {}).map(([category, certArray]) => (
+              <div key={category}>
+                <h4>{category}</h4>
+                {certArray.length === 0 ? (
+                  <p>No certifications.</p>
+                ) : (
+                  certArray.map((cert, index) => (
+                    <div key={index} style={{ border: "1px solid #ccc", padding: "10px", marginBottom: "10px" }}>
+                      <img src={cert.imageURL} alt={cert.name} style={{ width: "200px" }} />
+                      <p><strong>Name:</strong> {cert.name}</p>
+                      <p><strong>Issuer:</strong> {cert.issuer}</p>
+                      <p><strong>Issue Date:</strong> {cert.issueDate}</p>
+                      <p><strong>Expiry Date:</strong> {cert.expiryDate}</p>
+                      <p><strong>Credential ID:</strong> {cert.credentialID}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            ))}
+
+            {selectedUser.submissions && selectedUser.submissions.length > 0 && (
+              <>
+                <h5>Submissions</h5>
+                <ul>
+                  {selectedUser.submissions.map((submission, index) => (
+                    <li key={index}>
+                      <strong>Live Demo:</strong>{" "}
+                      <a href={submission.liveDemoLink} target="_blank" rel="noopener noreferrer">
+                        View
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+
+
+          <div className="user-applications">
+            <h3>Applied Jobs</h3>
+            {appliedJobs.length > 0 ? (
+              <ul>
+                {appliedJobs.map((job, index) => (
+                  <li key={`applied-${job.id || index}`} className="job-item">
+                    <p><strong>Job Title:</strong> {job.title}</p>
+                    <p><strong>Location:</strong> {job.location}</p>
+                    <p><strong>Applied At:</strong> {job.appliedAt?.toDate ? job.appliedAt.toDate().toLocaleString() : "N/A"}</p>
+                    <p><strong>Status:</strong> {job.status}</p>
+                    <p><small>Application ID: {job.applicantId}</small></p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No applied jobs found.</p>
+            )}
+
+            <h3>Hired Jobs</h3>
+            {hiredJobs.length > 0 ? (
+              <ul>
+                {hiredJobs.map((job, index) => (
+                  <li key={`hired-${job.id || index}`} className="job-item">
+                    <p><strong>Job Title:</strong> {job.title}</p>
+                    <p><strong>Location:</strong> {job.location}</p>
+                    <p><strong>Hired By:</strong> {job.companyName}</p>
+                    <p><strong>Hired At:</strong> {job.appliedAt?.toDate ? job.appliedAt.toDate().toLocaleString() : "N/A"}</p>
+                    <p><strong>Status:</strong> {job.status}</p>
+                    <p><small>Application ID: {job.applicantId}</small></p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No hired jobs found.</p>
+            )}
+          </div>
+        </>
+      ) : selectedUserType !== "Applicants" && !isUserClassVisible ? (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <p><strong>Company Name:</strong> {selectedUser.companyName}</p>
+              <p><strong>Email:</strong> {selectedUser.email}</p>
+              <p><strong>Website:</strong> {selectedUser.companyWebsite}</p>
+              <p><strong>Contact-Person:</strong> {selectedUser.contactPerson}</p>
+              <p><strong>Location:</strong> {selectedUser.location}</p>
+              <p><strong>Phone:</strong> {selectedUser.phone}</p>
+            </div>
+            <div>
+              <p style={{ color: selectedUser.disabled ? "red" : "green", fontWeight: "bold" }}>
+                Account Status: {selectedUser.disabled ? "Disabled" : "Active"}
+              </p>
+              <button
+                onClick={() => handleToggleUserStatus(selectedUser.id, !selectedUser.disabled)}
+                style={{
+                  padding: "5px 10px",
+                  backgroundColor: selectedUser.disabled ? "#28a745" : "#dc3545",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "5px",
+                  cursor: "pointer",
+                }}
+              >
+                {selectedUser.disabled ? "Enable Account" : "Disable Account"}
+              </button>
+            </div>
+          </div>
+          <h5>Posted Jobs</h5>
           <ul>
-            {selectedUser.submissions.map((submission, index) => (
+            {employerJobs.map((job, index) => (
               <li key={index}>
-                <strong>Live Demo:</strong>{" "}
-                <a href={submission.liveDemoLink} target="_blank" rel="noopener noreferrer">
-                  View
-                </a>
+                <p><strong>Job Title:</strong> {job.title}</p>
+                <p><strong>Location:</strong> {job.location}</p>
+                <p><strong>Job Role:</strong> {job.jobRole}</p>
+                <p>
+                  <button onClick={() => {
+                    handleJobClick(job.id);
+                    setShowApplicant(true);
+                    setjobsApproved(false);
+                  }} style={{ cursor: "pointer" }}>
+                    View Applicants
+                  </button>
+                  <button onClick={() => {
+                    handleHiredClick(job);
+                    setShowApplicant(false);
+                  }} style={{ cursor: "pointer" }}>
+                    View Hired
+                  </button>
+                   <button onClick={() => {
+                handleDeleteJob(job.id);
+                // handleOpenHiredModal();
+              }}style={{ cursor: "pointer" }}>
+              Delete Job
+            </button>
+                </p>
               </li>
             ))}
           </ul>
         </>
-      )}
+      ) : null}
+
+      <button
+        onClick={() => {
+          // Clear the hired jobs first
+          setHiredJobs([]);
+          // Then close the modal
+          handleCloseUserModal();
+        }}
+        style={{
+          marginTop: "20px",
+          padding: "10px 15px",
+          backgroundColor: "#007bff",
+          color: "#fff",
+          border: "none",
+          borderRadius: "5px",
+          cursor: "pointer",
+        }}
+      >
+        Close
+      </button>
     </div>
-
-
-    <div className="user-applications">
-      <h3>Applied Jobs</h3>
-      {appliedJobs.length > 0 ? (
-        <ul>
-          {appliedJobs.map((job, index) => (
-            <li key={`applied-${job.id || index}`} className="job-item">
-              <p><strong>Job Title:</strong> {job.title}</p>
-              <p><strong>Location:</strong> {job.location}</p>
-              <p><strong>Applied At:</strong> {job.appliedAt?.toDate ? job.appliedAt.toDate().toLocaleString() : "N/A"}</p>
-              <p><strong>Status:</strong> {job.status}</p>
-              <p><small>Application ID: {job.applicantId}</small></p>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>No applied jobs found.</p>
-      )}
-
-      <h3>Hired Jobs</h3>
-      {hiredJobs.length > 0 ? (
-        <ul>
-          {hiredJobs.map((job, index) => (
-            <li key={`hired-${job.id || index}`} className="job-item">
-              <p><strong>Job Title:</strong> {job.title}</p>
-              <p><strong>Location:</strong> {job.location}</p>
-              <p><strong>Hired By:</strong> {job.companyName}</p>
-              <p><strong>Hired At:</strong> {job.appliedAt?.toDate ? job.appliedAt.toDate().toLocaleString() : "N/A"}</p>
-              <p><strong>Status:</strong> {job.status}</p>
-              <p><small>Application ID: {job.applicantId}</small></p>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>No hired jobs found.</p>
-      )}
-    </div>
-  </>
-) : selectedUserType !== "Applicants" &&  !isUserClassVisible ? (
-  <>
-    <p>
-      <strong>Company Name:</strong> {selectedUser.companyName}
-    </p>
-    <p>
-      <strong>Email:</strong> {selectedUser.email}
-    </p>
-    <p>
-      <strong>Website:</strong> {selectedUser.companyWebsite}
-    </p>
-    <p>
-      <strong>Contact-Person:</strong> {selectedUser.contactPerson}
-    </p>
-    <p>
-      <strong>Location:</strong> {selectedUser.location}
-    </p>
-    <p>
-      <strong>Phone:</strong> {selectedUser.phone}
-    </p>
-    <h5>Posted Jobs</h5>
-    <ul>
-      {employerJobs.map((job, index) => (
-        <li key={index}>
-          <p>
-            <strong>Job Title:</strong> {job.title}
-          </p>
-          <p>
-            <strong>Location:</strong> {job.location}
-          </p>
-          <p>
-            <strong>Job Role:</strong> {job.jobRole}
-          </p>
-          <p>
-            <button onClick={() => {
-  handleJobClick(job.id);
-  setShowApplicant(true);
-}}
- style={{ cursor: "pointer" }}>
-              View Applicants
-            </button>
-            <button onClick={() => {
-                handleHiredClick(job);
-                setShowApplicant(false);
-                // handleOpenHiredModal();
-              }}style={{ cursor: "pointer" }}>
-              View Hired
-            </button>
-          </p>
-        </li>
-      ))}
-    </ul>
-  </>
-) : null}
-
-
-
-
-           <button
-            onClick={() => {
-              // Clear the hired jobs first
-              setHiredJobs([]);
-              // Then close the modal
-              handleCloseUserModal();
-            }}
-            style={{
-              marginTop: "20px",
-              padding: "10px 15px",
-              backgroundColor: "#007bff",
-              color: "#fff",
-              border: "none",
-              borderRadius: "5px",
-              cursor: "pointer",
-            }}
-          >
-            Close
-          </button>
-          </div>
-        </div>
-      )}
-
-      {/* Inside your modal or component where you're displaying the job applicants */}
+  </div>
+)}
 
 {/* Regular Job Applicants Modal */}
-{selectedJob && !viewingHired && applicantshow &&(
+{selectedJob && !viewingHired && applicantshow &&jobsApproved == false &&(
   <div
     style={{
       position: "fixed",
@@ -4311,7 +4650,7 @@ const handleHiredApplicantClick = (applicant) => {
       {/* Regular Job Applicants Section */}
       <h4>Job Applicants</h4>
       <ul>
-        {jobApplicants.map((applicant, index) => (
+        {applicantshow == true && jobsApproved == false &&jobApplicants.map((applicant, index) => (
           <li key={index}>
             <p>
               <strong>Name:</strong> {applicant.name}
@@ -4632,10 +4971,49 @@ const handleHiredApplicantClick = (applicant) => {
               <strong>Email:</strong> {selectedApplicant.email}
             </p>
             <p>
-              <strong>Resume:</strong>{" "}
-              <a href={selectedApplicant.resumeURL} target="_blank" rel="noopener noreferrer">
-                View Resume
-              </a>
+            {selectedApplicant.certifications && (
+              <div className="mt-4">
+                <p className="font-semibold text-gray-700 mb-2">Certifications:</p>
+                <div className="space-y-4">
+                  {Object.entries(selectedApplicant.certifications).map(([category, certs]) => 
+                    certs.length > 0 && (
+                      <div key={category} className="bg-white border border-gray-200 rounded-md overflow-hidden">
+                        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                          <h4 className="font-medium text-gray-700">{category}</h4>
+                        </div>
+                        <div className="p-0">
+                          {certs.map((cert, idx) => (
+                            <div key={idx} className="p-4 border-b border-gray-100 last:border-b-0">
+                              <div className="flex flex-col space-y-2">
+                                <div className="flex justify-between">
+                                  <span className="font-medium text-gray-800">{cert.name}</span>
+                                  <span className="text-sm text-gray-500">ID: {cert.credentialID}</span>
+                                </div>
+                                <div className="text-sm text-gray-600">Issued by {cert.issuer}</div>
+                                <div className="flex justify-between text-sm text-gray-600">
+                                  <span>Issued: {new Date(cert.issueDate).toLocaleDateString()}</span>
+                                  <span>Expires: {new Date(cert.expiryDate).toLocaleDateString()}</span>
+                                </div>
+                                {cert.imageURL && (
+                                  <div className="mt-2">
+                                    <img 
+                                      src={cert.imageURL} 
+                                      alt={`${cert.name} Certificate`} 
+                                      style={{ width: '100%', height: 'auto' }} 
+                                    />
+
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
             </p>
             <button
               onClick={handleCloseApplicantModal}
@@ -4695,7 +5073,7 @@ const handleHiredApplicantClick = (applicant) => {
                       View
                     </button>
                     <button
-                      onClick={() => handleRejectJob(job.id)}
+                      onClick={() => handleRejectJob(job.id,job)}
                       style={{
                         padding: "5px 10px",
                         backgroundColor: "#ff4d4d",
@@ -4761,6 +5139,7 @@ const handleHiredApplicantClick = (applicant) => {
                   onClick={() => {
                     handlePublishJob(selectedJob);
                     setSelectedJob(null);
+                 
                   }}
                   style={{
                     padding: "10px 20px",
@@ -4851,31 +5230,97 @@ const handleHiredApplicantClick = (applicant) => {
         </div>
     )}
     {/* Archives Section */}
-    {showDeletedFiles && !selectedUserType && !isUserClassVisible && !showDashboard && !historyVisible && !announcementVisible && !viewingReport &&(
-        <div  style={{ border: "1px solid #ddd", borderRadius: "5px", padding: "20px", fontFamily: "Arial, sans-serif" }}>
-            <h3>Deleted Files</h3>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                    <tr>
-                        <th style={{ border: "1px solid #ddd", padding: "10px" }}>Name/Company</th>
-                        <th style={{ border: "1px solid #ddd", padding: "10px" }}>Email</th>
-                        <th style={{ border: "1px solid #ddd", padding: "10px" }}>Type</th>
-                        <th style={{ border: "1px solid #ddd", padding: "10px" }}>Reason</th>
+{showDeletedFiles && !selectedUserType && !isUserClassVisible && !showDashboard && !historyVisible && !announcementVisible && !viewingReport && (
+    <div style={{ border: "1px solid #ddd", borderRadius: "5px", padding: "20px", fontFamily: "Arial, sans-serif" }}>
+        <h3>Deleted Files</h3>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+                <tr>
+                    <th style={{ border: "1px solid #ddd", padding: "10px" }}>File Name</th>
+                    <th style={{ border: "1px solid #ddd", padding: "10px" }}>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {deletedFiles.map((file) => (
+                    <tr key={file.id}>
+                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>{file.id || "N/A"}</td>
+                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                            <button 
+                                onClick={() => {
+                                    setSelectedDeletedFile(file);
+                                    setShowDataModal(true);
+                                }}
+                                style={{ 
+                                    padding: "5px 10px", 
+                                    backgroundColor: "#007bff", 
+                                    color: "white", 
+                                    border: "none", 
+                                    borderRadius: "3px",
+                                    cursor: "pointer"
+                                }}
+                            >
+                                View Data
+                            </button>
+                        </td>
                     </tr>
-                </thead>
-                <tbody>
-                    {deletedFiles.map((file) => (
-                        <tr key={file.id}>
-                            <td style={{ border: "1px solid #ddd", padding: "10px" }}>{file.type === "applicant" ? file.name : file.companyName}</td>
-                            <td style={{ border: "1px solid #ddd", padding: "10px" }}>{file.email}</td>
-                            <td style={{ border: "1px solid #ddd", padding: "10px" }}>{file.type}</td>
-                            <td style={{ border: "1px solid #ddd", padding: "10px" }}>{file.reason || "N/A"}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    )}
+                ))}
+            </tbody>
+        </table>
+        
+        {/* Modal for displaying file data */}
+        {showDataModal && selectedDeletedFile && (
+            <div style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                zIndex: 1000
+            }}>
+                <div style={{
+                    backgroundColor: "white",
+                    padding: "20px",
+                    borderRadius: "5px",
+                    maxWidth: "80%",
+                    maxHeight: "80%",
+                    overflowY: "auto"
+                }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px" }}>
+                        <h3>File: {selectedDeletedFile.id}</h3>
+                        <button 
+                            onClick={() => setShowDataModal(false)}
+                            style={{ 
+                                background: "none", 
+                                border: "none", 
+                                fontSize: "10px",
+                                cursor: "pointer",
+                                color: "black",
+                                borderRadius:"20px"
+                            }}
+                        >
+                            ×
+                        </button>
+                    </div>
+                    
+                    <pre style={{ 
+                        whiteSpace: "pre-wrap", 
+                        backgroundColor: "#f5f5f5", 
+                        padding: "15px",
+                        borderRadius: "5px",
+                        maxHeight: "500px",
+                        overflowY: "auto"
+                    }}>
+                        {JSON.stringify(selectedDeletedFile, null, 2)}
+                    </pre>
+                </div>
+            </div>
+        )}
+    </div>
+)}
 
 
 {/* {historyVisible && !isUserApproval && !showDeletedFiles && !selectedUserType && !isUserClassVisible && !announcementVisible && !showDashboard && (

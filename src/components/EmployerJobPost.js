@@ -189,7 +189,18 @@ import React, { useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuthState } from 'react-firebase-hooks/auth';
-
+import PageTemplate, { 
+  AnimatedHeading, 
+  AnimatedParagraph, 
+  AnimatedButton, 
+  AnimatedContainer ,
+  AnimatedAnchor,
+  AnimatedMap,
+  AnimatedImage,
+  AnimatedList,
+  AnimatedListItem,
+  AnimatedGroup
+} from './PageTemplate';
 // Import job options from a shared location
 const jobOptions = [
   "Front-end Developer", "Back-end Developer", "Full Stack Developer",
@@ -279,49 +290,104 @@ const EmployerJobPost = () => {
     };
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            const jobId = `job_${Date.now()}`;
-            const jobRef = doc(db, 'jobs-to-be-approved', jobId);
+    e.preventDefault();
+    try {
+        const jobId = `job_${Date.now()}`;
+        const jobRef = doc(db, 'jobs-to-be-approved', jobId);
 
-            await setDoc(jobRef, {
-                id: jobId,
-                title,
-                description,
-                location,
-                jobRole, // Add the job role to the document
-                averageScore,
-                createdAt: new Date(),
-                employerId: user?.uid,
-                companyName,
-                jobRole,
-                status: 'pending',
-            });
+        await setDoc(jobRef, {
+            id: jobId,
+            title,
+            description,
+            location,
+            jobRole,
+            averageScore,
+            createdAt: new Date(),
+            employerId: user?.uid || null,
+            companyName,
+            status: 'pending',
+        });
 
-            // Clear form after submission
-            setTitle('');
-            setDescription('');
-            setLocation('');
-            setJobRole('');
-            setAverageScore(50);
-            alert('Job posted successfully and is awaiting approval!');
-        } catch (error) {
-            console.error('Error posting job:', error);
-            alert('Failed to post the job. Please try again.');
-        }
-    };
+        // Clear form after submission
+        setTitle('');
+        setDescription('');
+        setLocation('');
+        setJobRole('');
+        setAverageScore(50);
+
+        alert('Job posted successfully and is awaiting approval!');
+    } catch (error) {
+        console.error('Error posting job:', error);
+        alert('Failed to post the job. Please try again.');
+    }
+};
+
 
     return (
-        <div id="job-posting-container" style={{ padding: '20px', maxWidth: '600px', margin: 'auto',marginTop:"90px", borderRadius: "8px" }}>
+       <AnimatedGroup 
+        className="jp-animated-group my-12 space-y-6 bg-gray-50 p-6 rounded-lg shadow-md"
+        baseDelay={0.2}  // Start delay (seconds)
+        delayIncrement={0.15}  // Each child adds this much delay
+      >
+        <div id="jp-job-posting-container">
+            <style jsx>{`
+                #jp-job-posting-container {
+                    padding: 20px;
+                    max-width: 600px;
+                    margin: auto;
+                    margin-top: 90px;
+                    border-radius: 8px;
+                }
+            `}</style>
             <h2>Post a Job</h2>
-            <form onSubmit={handleSubmit} style={styles.formContainer}>
+            <form onSubmit={handleSubmit} className="jp-form-container">
+                <style jsx>{`
+                    .jp-form-container {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 16px;
+                    }
+                    .jp-input {
+                        padding: 12px;
+                        border: 1px solid #ddd;
+                        border-radius: 4px;
+                        font-size: 16px;
+                    }
+                    .jp-select {
+                        padding: 12px;
+                        border: 1px solid #ddd;
+                        border-radius: 4px;
+                        font-size: 16px;
+                    }
+                    .jp-textarea {
+                        min-height: 150px;
+                        padding: 12px;
+                        border: 1px solid #ddd;
+                        border-radius: 4px;
+                        font-size: 16px;
+                        resize: vertical;
+                    }
+                    .jp-button {
+                        background-color: #4a90e2;
+                        color: white;
+                        border: none;
+                        padding: 12px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-weight: bold;
+                        transition: background-color 0.3s;
+                    }
+                    .jp-button:hover {
+                        background-color: #357ab8;
+                    }
+                `}</style>
                 <input
                     type="text"
                     placeholder="Job Title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     required
-                    style={styles.input}
+                    className="jp-input"
                 />
                 
                 {/* Job Role Dropdown */}
@@ -329,7 +395,7 @@ const EmployerJobPost = () => {
                     value={jobRole}
                     onChange={(e) => setJobRole(e.target.value)}
                     required
-                    style={styles.select}
+                    className="jp-select"
                 >
                     <option value="">Select Job Role</option>
                     {jobOptions.map((option) => (
@@ -344,7 +410,7 @@ const EmployerJobPost = () => {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     required
-                    style={styles.textarea}
+                    className="jp-textarea"
                 />
                 <input
                     type="text"
@@ -352,13 +418,41 @@ const EmployerJobPost = () => {
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     required
-                    style={styles.input}
+                    className="jp-input"
                 />
-
                 {/* Average Score Input */}
-                <div style={styles.scoreContainer}>
-                    <label style={styles.label}>Average Score:</label>
-                    <div style={styles.rangeContainer}>
+                <div className="jp-score-container">
+                    <style jsx>{`
+                        .jp-score-container {
+                            margin-top: 10px;
+                        }
+                        .jp-label {
+                            display: block;
+                            margin-bottom: 8px;
+                            font-weight: bold;
+                        }
+                        .jp-range-container {
+                            display: flex;
+                            align-items: center;
+                            gap: 12px;
+                        }
+                        .jp-number-input {
+                            width: 60px;
+                            padding: 8px;
+                            border: 1px solid #ddd;
+                            border-radius: 4px;
+                        }
+                        .jp-range-input {
+                            flex-grow: 1;
+                        }
+                        .jp-percentage {
+                            min-width: 50px;
+                            text-align: right;
+                            font-weight: bold;
+                        }
+                    `}</style>
+                    <label className="jp-label">Average Score:</label>
+                    <div className="jp-range-container">
                         <input
                             type="number"
                             value={averageScore}
@@ -366,7 +460,7 @@ const EmployerJobPost = () => {
                             max="100"
                             onChange={handleAverageScoreChange}
                             placeholder="0-100"
-                            style={styles.numberInput}
+                            className="jp-number-input"
                         />
                         <input
                             type="range"
@@ -374,31 +468,79 @@ const EmployerJobPost = () => {
                             max="100"
                             value={averageScore}
                             onChange={(e) => setAverageScore(parseInt(e.target.value, 10))}
-                            style={styles.rangeInput}
+                            className="jp-range-input"
                         />
-                        <span style={styles.percentage}>{averageScore}%</span>
+                        <span className="jp-percentage">{averageScore}%</span>
                     </div>
                 </div>
-
-                <button type="submit" style={styles.button}>
+                <button type="submit" className="jp-button">
                     Submit Job
                 </button>
             </form>
-
-            <div style={{ marginTop: '20px', padding: '10px', background: '#f9f9f9', border: '1px solid #ddd', borderRadius: '5px', position: 'relative' }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px', position: 'relative' }}>
-                <span className="tooltip-exclamation">!</span>
-                <div className="tooltip-text">
-                    <strong>How the System Evaluates the Average Score:</strong><br />
-                    <strong>HTML:</strong> Evaluates structure, accessibility, and avoidance of deprecated tags like <code>&lt;font&gt;</code>.<br />
-                    <strong>CSS:</strong> Ensures modularity, minimal use of <code>!important</code>, and adherence to coding standards.<br />
-                    <strong>JavaScript:</strong> Checks for clean code, modularity, and avoidance of debugging artifacts like <code>console.log</code>.<br /><br />
-                    The average score reflects the quality standard for applicants' portfolios.
+            <div className="jp-tooltip-wrapper">
+                <style jsx>{`
+                    .jp-tooltip-wrapper {
+                        margin-top: 20px;
+                        padding: 10px;
+                        background: #f9f9f9;
+                        border: 1px solid #ddd;
+                        border-radius: 5px;
+                        position: relative;
+                        cursor: help;
+                    }
+                    .jp-tooltip-header {
+                        display: flex;
+                        align-items: center;
+                        
+                        margin-bottom: 10px;
+                        position: relative;
+                    }
+                    .jp-tooltip-exclamation {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 20px;
+                        height: 20px;
+                        background: #ff9800;
+                        color: white;
+                        border-radius: 50%;
+                        font-weight: bold;
+                        cursor: help;
+                    }
+                    .jp-tooltip-text {
+                        display: none;
+                        position: absolute;
+                        top: 30px;
+                        
+                        left: 0;
+                        background: white;
+                        border: 1px solid #ddd;
+                        padding: 15px;
+                        border-radius: 4px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        z-index: 100;
+                        width: 300px;
+                    }
+                    .jp-tooltip-exclamation:hover + .jp-tooltip-text{
+                        display: block;
+                        width: 100%;
+                        margin-top:-20rem;
+                    }
+                `}</style>
+                <div className="jp-tooltip-header">
+                    <span className="jp-tooltip-exclamation">!</span>
+                    <div className="jp-tooltip-text">
+                        <strong>How the System Evaluates the Average Score:</strong><br />
+                        <strong>HTML:</strong> Evaluates structure, accessibility, and avoidance of deprecated tags like <code>&lt;font&gt;</code>.<br />
+                        <strong>CSS:</strong> Ensures modularity, minimal use of <code>!important</code>, and adherence to coding standards.<br />
+                        <strong>JavaScript:</strong> Checks for clean code, modularity, and avoidance of debugging artifacts like <code>console.log</code>.<br /><br />
+                        The average score reflects the quality standard for applicants' portfolios.
+                    </div>
+                    <strong className="jp-title-text" style={{ marginLeft: '10px' }}>How the System Evaluates the Average Score:</strong>
                 </div>
-                <strong style={{ marginLeft: '10px' }}>How the System Evaluates the Average Score:</strong>
             </div>
         </div>
-        </div>
+        </AnimatedGroup>
     );
 };
 

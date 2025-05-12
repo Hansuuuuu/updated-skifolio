@@ -644,7 +644,8 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
 }
 
   .hero h1, .hero p {
-    text-align: center; /* Centers the text inside the h1 and p elements */
+    text-align: center;
+    font-family: 'Times New Roman', Times, serif
 }
 
 /** END OF CHANGED HERO CSS*/

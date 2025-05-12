@@ -2,6 +2,18 @@
 import React from "react";
 import '../styles.css';
 
+  import PageTemplate, { 
+    AnimatedHeading, 
+    AnimatedParagraph, 
+    AnimatedButton, 
+    AnimatedContainer ,
+    AnimatedAnchor,
+    AnimatedMap,
+    AnimatedImage,
+    AnimatedList,
+    AnimatedListItem,
+    AnimatedGroup
+  } from './PageTemplate';
 const developers = [
   {
     name: "Ken Robert Noleal",
@@ -27,10 +39,16 @@ const developers = [
 
 const AboutUs = () => {
   return (
+       <PageTemplate className="about-us-page">
+        <AnimatedGroup 
+        className="my-12 space-y-6 bg-gray-50 p-6 rounded-lg shadow-md"
+        baseDelay={0.2}  // Start delay (seconds)
+        delayIncrement={0.15}  // Each child adds this much delay
+      >
     <div className="about-wrapper">
       {/* Header */}
       <header className="top-header">
-        <h1 className="site-logo">Ski-Folio</h1>
+         <AnimatedHeading className="site-logo">Ski-Folio</AnimatedHeading>
         <div className="action-btns">
           <a href="/" className="buttonHome">Home</a>
         </div>
@@ -38,20 +56,20 @@ const AboutUs = () => {
 
       {/* System Description */}
       <section className="about-content">
-        <h2 className="about-title">About Ski-Folio</h2>
-        <p className="about-description">
+        <AnimatedHeading className="about-title">About Ski-Folio</AnimatedHeading>
+        <AnimatedParagraph delay={0.3} className="about-description">
           Ski-Folio is a personalized job matching and portfolio platform designed to connect applicants with employers in a simple and efficient way. 
           Applicants can showcase their skills, create digital portfolios, and apply for jobs posted by businesses. 
           Meanwhile, employers can post job openings and find ideal candidates that match their needs.
-        </p>
+        </AnimatedParagraph>
 
         {/* Developer Section */}
-        <h3 className="about-title" style={{ marginTop: "50px" }}>Meet the Developers</h3>
+        <AnimatedHeading className="about-title" style={{ marginTop: "50px" }}>Meet the Developers</AnimatedHeading>
         <div className="dev-cards-container">
           {developers.map((dev, index) => (
             <div className="dev-card" key={index}>
-              <img src={dev.image} alt={dev.name} className="dev-image" />
-              <h3 className="dev-name">{dev.name}</h3>
+              <AnimatedImage src={dev.image} alt={dev.name} className="dev-image" />
+             <AnimatedHeading className="dev-name">{dev.name}</AnimatedHeading>
               <p className="dev-role">{dev.role}</p>
             </div>
           ))}
@@ -63,6 +81,8 @@ const AboutUs = () => {
         Â© {new Date().getFullYear()} Ski-Folio. All rights reserved.
       </footer>
     </div>
+    </AnimatedGroup>
+    </PageTemplate>
   );
 };
 

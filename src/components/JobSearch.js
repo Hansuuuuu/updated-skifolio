@@ -533,6 +533,18 @@ import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, Timestamp,addDoc } from "firebase/firestore";
 import {serverTimestamp } from "firebase/firestore";
+import PageTemplate, { 
+  AnimatedHeading, 
+  AnimatedParagraph, 
+  AnimatedButton, 
+  AnimatedContainer ,
+  AnimatedAnchor,
+  AnimatedMap,
+  AnimatedImage,
+  AnimatedList,
+  AnimatedListItem,
+  AnimatedGroup
+} from './PageTemplate';
 const JobSearch = () => {
     const [jobs, setJobs] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
@@ -714,27 +726,27 @@ const JobSearch = () => {
           createdAt: serverTimestamp(),
         });
         
-        // Also create a subcollection of reports within the job document
-        const jobReportRef = collection(db, "jobs", expandedJob.id, "reports");
-        await addDoc(jobReportRef, {
-          reportedBy: userId,
-          reason: reportReason,
-          details: reportDetails,
-          status: "pending",
-          createdAt: serverTimestamp(),
-        });
+        // // Also create a subcollection of reports within the job document
+        // const jobReportRef = collection(db, "jobs", expandedJob.id, "reports");
+        // await addDoc(jobReportRef, {
+        //   reportedBy: userId,
+        //   reason: reportReason,
+        //   details: reportDetails,
+        //   status: "pending",
+        //   createdAt: serverTimestamp(),
+        // });
         
-        // Notify admin about the report
-        const adminNotificationsRef = collection(db, "admin_notifications");
-        await addDoc(adminNotificationsRef, {
-          type: "job_report",
-          jobId: expandedJob.id,
-          jobTitle: expandedJob.title,
-          companyName: expandedJob.companyName,
-          reportReason: reportReason,
-          reportedAt: serverTimestamp(),
-          status: "unread",
-        });
+        // // Notify admin about the report
+        // const adminNotificationsRef = collection(db, "admin_notifications");
+        // await addDoc(adminNotificationsRef, {
+        //   type: "job_report",
+        //   jobId: expandedJob.id,
+        //   jobTitle: expandedJob.title,
+        //   companyName: expandedJob.companyName,
+        //   reportReason: reportReason,
+        //   reportedAt: serverTimestamp(),
+        //   status: "unread",
+        // });
         
         alert("Thank you for your report. Our team will review it shortly.");
         setShowReportForm(false);
@@ -1018,6 +1030,11 @@ const JobSearch = () => {
 
 
 return (
+  <AnimatedGroup 
+        className="my-12 space-y-6 bg-gray-50 p-6 rounded-lg shadow-md"
+        baseDelay={0.2}  // Start delay (seconds)
+        delayIncrement={0.15}  // Each child adds this much delay
+      >
   <div style={{ position: "relative" }}>
     <div
       id="job-search-container"
@@ -1120,6 +1137,7 @@ return (
         </div>
 
         <h3>All Jobs</h3>
+        
         <div style={{ display: "flex", flexWrap: "wrap", gap: "20px" }}>
           {filteredJobs.map((job) => (
             <div
@@ -1293,6 +1311,7 @@ return (
       </div>
     )}
   </div>
+  </AnimatedGroup>
 );
 }
 

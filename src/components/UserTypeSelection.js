@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom'; // Use useNavigate from react-router-dom v6
-
+import PageTemplate, { 
+  AnimatedHeading, 
+  AnimatedParagraph, 
+  AnimatedButton, 
+  AnimatedContainer ,
+  AnimatedAnchor,
+  AnimatedMap,
+  AnimatedImage,
+  AnimatedList,
+  AnimatedListItem,
+  AnimatedGroup
+} from './PageTemplate';
 const Home = ({ setUserType }) => {
     const [roleSelected, setRoleSelected] = useState(false);
     const [showAdminButton, setShowAdminButton] = useState(false);
@@ -30,6 +41,11 @@ const Home = ({ setUserType }) => {
     }, []);
 
     return (
+        <AnimatedGroup 
+                className="my-12 space-y-6 bg-gray-50 p-6 rounded-lg shadow-md"
+                baseDelay={0.2}  // Start delay (seconds)
+                delayIncrement={0.15}  // Each child adds this much delay
+              >
         <div className='hero'>
             <div className='Home'>
                 <div className='choicecontainer'>
@@ -47,6 +63,11 @@ const Home = ({ setUserType }) => {
                             </div>
                         </>
                     ) : (
+                         <AnimatedGroup 
+                className="my-12 space-y-6 bg-gray-50 p-6 rounded-lg shadow-md"
+                baseDelay={0.2}  // Start delay (seconds)
+                delayIncrement={0.15}  // Each child adds this much delay
+              >
                         <div className='Home1'>
                             <Link to="/signin">
                                 <button className="submit">Log In</button>
@@ -56,6 +77,7 @@ const Home = ({ setUserType }) => {
                             </Link>
                             <button className="submit" onClick={handleChangeRole}>Change Role</button>
                         </div>
+                        </AnimatedGroup>
                     )}
                 </div>
             </div>
@@ -64,6 +86,7 @@ const Home = ({ setUserType }) => {
                 <button className={`admin-btn ${showAdminButton ? 'show' : ''}`} onClick={handleAdmit}>Alrights Reserve 2024-2025</button>
             </footer>
         </div>
+        </AnimatedGroup>
     );
 };
 

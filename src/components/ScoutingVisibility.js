@@ -115,7 +115,18 @@ import { db, auth } from "../firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import "../styles.css";
-
+import PageTemplate, { 
+  AnimatedHeading, 
+  AnimatedParagraph, 
+  AnimatedButton, 
+  AnimatedContainer ,
+  AnimatedAnchor,
+  AnimatedMap,
+  AnimatedImage,
+  AnimatedList,
+  AnimatedListItem,
+  AnimatedGroup
+} from './PageTemplate';
 const jobOptions = [
   "Front-end Developer", "Back-end Developer", "Full Stack Developer",
   "React Developer", "Vue.js Developer", "Angular Developer",
@@ -128,7 +139,7 @@ const Scouting = () => {
   const [scoutVisibility, setScoutVisibility] = useState(false);
   const [experience, setExperience] = useState("");
   const [selectedJobs, setSelectedJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -136,7 +147,7 @@ const Scouting = () => {
         fetchScoutingStatus(user.uid);
       } else {
         console.log("No user signed in.");
-        setLoading(false);
+        // setLoading(false);
       }
     });
 
@@ -155,7 +166,7 @@ const Scouting = () => {
     } catch (error) {
       console.error("Error fetching scouting status:", error);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
 
@@ -197,11 +208,16 @@ const Scouting = () => {
     }
   };
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+  // if (loading) {
+  //   return <div>Loading...</div>;
+  // }
 
   return (
+    <AnimatedGroup 
+        className="my-12 space-y-6 bg-gray-50 p-6 rounded-lg shadow-md"
+        baseDelay={0.2}  // Start delay (seconds)
+        delayIncrement={0.15}  // Each child adds this much delay
+      >
     <div style={{ padding: "20px", textAlign: "center" }}>
       <h2 style={{ color: "#333" }}>Scouting Visibility</h2>
 
@@ -276,6 +292,7 @@ const Scouting = () => {
         </div>
       )}
     </div>
+    </AnimatedGroup>
   );
 };
 

@@ -430,8 +430,19 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage, auth } from '../firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { doc, getDoc, updateDoc, arrayRemove, setDoc, collection, addDoc } from 'firebase/firestore';
-
+import { doc, getDoc, updateDoc, arrayRemove, setDoc, collection, addDoc,serverTimestamp } from 'firebase/firestore';
+import PageTemplate, { 
+  AnimatedHeading, 
+  AnimatedParagraph, 
+  AnimatedButton, 
+  AnimatedContainer ,
+  AnimatedAnchor,
+  AnimatedMap,
+  AnimatedImage,
+  AnimatedList,
+  AnimatedListItem,
+  AnimatedGroup
+} from './PageTemplate';
 const ApplicantProfile = () => {
     const [profilePicURL, setProfilePicURL] = useState('');
     const [coverPhotoURL, setCoverPhotoURL] = useState('');
@@ -649,6 +660,8 @@ const ApplicantProfile = () => {
     };
 
     const archiveFile = async (type, skill, certificate) => {
+         const customDocId = `deleted-file-${Date.now()}-${certificate.id || Math.random().toString(36).substring(2, 8)}`;
+
         const archivedData = {
             applicantId: auth.currentUser.uid,
             type,
@@ -657,7 +670,10 @@ const ApplicantProfile = () => {
             deletedAt: new Date(),
         };
         try {
-            await addDoc(collection(db, 'deletedFiles'), archivedData);
+            await setDoc(doc(db, "deletedFiles", customDocId), {
+                    deletedAt: serverTimestamp(),
+                    userId: auth.currentUser.uid
+                    });
         } catch (error) {
             console.error("Error archiving file:", error);
         }
@@ -667,13 +683,31 @@ const ApplicantProfile = () => {
         try {
             // Archive the certificate before deletion
             await archiveFile(type, skill, certificate);
-        
+            
             // Delete the image from storage if there is an imageURL
-            if (certificate.imageURL) {
-                const storageRef = ref(storage, certificate.imageURL);
-                await deleteObject(storageRef);
-            }
-        
+           if (certificate.imageURL) {
+                try {
+                    // For Storage operations, we use ref() from firebase/storage
+                    const storageRef = ref(storage, certificate.imageURL);
+                    
+                    // For Firestore operations, we need to use a document reference from firebase/firestore
+                    // First save the info about the file being deleted
+                    const customDocId = `deleted-certificate-${Date.now()}-${certificate.id || Math.random().toString(36).substring(2, 8)}`;
+
+                    // Use setDoc with a document reference that includes your custom ID
+                    await setDoc(doc(db, "deletedFiles", customDocId), {
+                    storageURL: certificate.imageURL,
+                    deletedAt: serverTimestamp(),
+                    userId: auth.currentUser.uid
+                    });
+                    
+                    // Then delete the file from storage
+                    await deleteObject(storageRef);
+                } catch (error) {
+                    console.error("Error in deletion process:", error);
+                    throw error; // Re-throw so the caller can handle it
+                }
+                }
             // Remove the certificate from the certifications array
             const updatedCertifications = certifications[skill].filter(
                 (cert) => cert.imageURL !== certificate.imageURL || cert.name !== certificate.name
@@ -700,7 +734,12 @@ const ApplicantProfile = () => {
     const InfoPopover = ({ show, onClose, title, content }) => {
         if (!show) return null;
         
-        return (
+return (
+           <AnimatedGroup 
+                    className="my-12 space-y-6 bg-gray-50 p-6 rounded-lg shadow-md"
+                    baseDelay={0.2}  // Start delay (seconds)
+                    delayIncrement={0.15}  // Each child adds this much delay
+                  >
             <div style={{
                 position: 'absolute',
                 zIndex: 1000,
@@ -763,6 +802,8 @@ const ApplicantProfile = () => {
                     {content}
                 </div>
             </div>
+                </AnimatedGroup>
+        
         );
     };
 
@@ -813,11 +854,16 @@ const ApplicantProfile = () => {
     };
 
     return (
+         <AnimatedGroup 
+                    className="my-12 space-y-6 bg-gray-50 p-6 rounded-lg shadow-md"
+                    baseDelay={0.2}  // Start delay (seconds)
+                    delayIncrement={0.15}  // Each child adds this much delay
+                  >
         <div id='applicant'>
             <h2>Applicant Profile</h2>
 
             {/* Cover Photo */}
-            <div style={{ position: 'relative', width: '100%', height: '300px', overflow: 'hidden', marginBottom: '10px', borderRadius: '12px' }}>
+            <div style={{ position: 'relative', width: '100%', height: '400px', overflow: 'hidden', borderRadius: '12px',marginTop:"2rem" }}>
                 <div style={{ position: 'absolute', top: '15px', right: '15px', zIndex: 10 }}>
                     <InfoButton 
                         onClick={() => setShowCoverGuide(!showCoverGuide)}
@@ -838,6 +884,7 @@ const ApplicantProfile = () => {
                                         <li style={{ marginBottom: '8px' }}><strong>How to update:</strong> Click anywhere on the cover image to upload a new one</li>
                                     </ul>
                                     <div style={{ 
+                                       
                                         padding: '12px',
                                         backgroundColor: '#f0f9ff',
                                         borderLeft: '4px solid #0078d4',
@@ -855,6 +902,7 @@ const ApplicantProfile = () => {
                     src={coverPhotoURL}
                     alt="Cover"
                     style={{ 
+                        
                         width: '100%', 
                         height: '100%', 
                         objectFit: 'cover', 
@@ -1492,6 +1540,7 @@ const ApplicantProfile = () => {
     </div>
 </div>
 </div>
+</AnimatedGroup>
 );
 };
 

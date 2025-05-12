@@ -54,10 +54,27 @@ import { useParams, Link } from 'react-router-dom';
 import SignIn from './SignIn'; // Assuming you have a SignIn component
 import Auth from './Auth'; // Assuming you have a signup component
 import '../style.css'
+import PageTemplate, { 
+  AnimatedHeading, 
+  AnimatedParagraph, 
+  AnimatedButton, 
+  AnimatedContainer ,
+  AnimatedAnchor,
+  AnimatedMap,
+  AnimatedImage,
+  AnimatedList,
+  AnimatedListItem,
+  AnimatedGroup
+} from './PageTemplate';
 const SignInOrSignUp = () => {
     const { userType } = useParams(); // Get user type from URL parameters
 
     return (
+        <AnimatedGroup 
+                className="my-12 space-y-6 bg-gray-50 p-6 rounded-lg shadow-md"
+                baseDelay={0.2}  // Start delay (seconds)
+                delayIncrement={0.15}  // Each child adds this much delay
+              >
         <div className='hero'>
         <div className='choicecontainer'>
             <h2>{userType === 'applicant' ? 'Applicant Sign In' : 'Employer Sign In'}</h2>
@@ -75,6 +92,7 @@ const SignInOrSignUp = () => {
             </Link>
         </div>
         </div>
+        </AnimatedGroup>
     );
 };
 

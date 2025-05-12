@@ -402,6 +402,19 @@ import { onSnapshot } from "firebase/firestore";
 import "../styles.css";
 import { Link } from "react-router-dom";
 import { FaUser, FaBriefcase, FaSearch, FaFileAlt, FaEye, FaBell, FaPlus, FaSignOutAlt } from "react-icons/fa";
+  import PageTemplate, { 
+    AnimatedHeading, 
+    AnimatedParagraph, 
+    AnimatedButton, 
+    AnimatedContainer ,
+    AnimatedAnchor,
+    AnimatedMap,
+    AnimatedImage,
+    AnimatedList,
+    AnimatedListItem,
+    AnimatedGroup
+  } from './PageTemplate';
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"></meta>
 const EmployerProfile = () => {
     const [employer, setEmployer] = useState(null);
     const [jobPosts, setJobPosts] = useState([]);
@@ -417,81 +430,115 @@ const EmployerProfile = () => {
     const [showHiredApplicants, setShowHiredApplicants] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [isHired, setUser] = useState()
-    
+    const [showReportForm, setShowReportForm] = useState(false);
+    const [reportReason, setReportReason] = useState("");
+    const [reportDetails, setReportDetails] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
+       
+const handleRemoveHiredEmployee = async (hiredEmployee, jobId) => {
+  if (!hiredEmployee || !jobId) {
+    console.error("No employee or job selected");
+    return;
+  }
 
-
-
-    const handleRemoveHiredEmployee = async (hiredEmployee, jobId) => {
-        if (!hiredEmployee || !jobId) {
-            console.error("No employee or job selected");
-            return;
-        }
-    
-        const confirmRemove = window.confirm(`Are you sure you want to remove ${hiredEmployee.name} from hired employees?`);
+  const confirmRemove = window.confirm(`Are you sure you want to remove ${hiredEmployee.name} from hired employees?`);
+  
+  if (confirmRemove) {
+    try {
+      // Get the employer's company name
+      const employerRef = doc(db, "employers", auth.currentUser.uid);
+      const employerDoc = await getDoc(employerRef);
+      
+      if (!employerDoc.exists()) {
+        console.error("Employer document not found");
+        alert("Error: Employer profile not found");
+        return;
+      }
+      
+      const employerData = employerDoc.data();
+      const companyName = employerData.companyName;
+      
+      if (!companyName) {
+        console.error("Company name not found in employer data");
+        alert("Error: Company name not found in your profile");
+        return;
+      }
+      
+      // 1. Remove from the legacy structure first (if it exists there)
+      const legacyHiredRef = doc(db, "employers", auth.currentUser.uid, "hired", jobId);
+      const legacyHiredDoc = await getDoc(legacyHiredRef);
+      
+      if (legacyHiredDoc.exists()) {
+        const currentHired = legacyHiredDoc.data().applicants || [];
         
-        if (confirmRemove) {
-            try {
-                // Get the employer's company name
-                const employerRef = doc(db, "employers", auth.currentUser.uid);
-                const employerDoc = await getDoc(employerRef);
-                
-                if (!employerDoc.exists()) {
-                    console.error("Employer document not found");
-                    alert("Error: Employer profile not found");
-                    return;
-                }
-                
-                const employerData = employerDoc.data();
-                const companyName = employerData.companyName;
-                
-                if (!companyName) {
-                    console.error("Company name not found in employer data");
-                    alert("Error: Company name not found in your profile");
-                    return;
-                }
-                
-                // 1. Remove from the original hired subcollection
-                const originalHiredRef = doc(db, "employers", auth.currentUser.uid, "hired", jobId);
-                
-                // Get current hired applicants
-                const originalHiredDoc = await getDoc(originalHiredRef);
-                
-                if (originalHiredDoc.exists()) {
-                    const currentHired = originalHiredDoc.data().applicants || [];
-                    
-                    // Filter out the employee to remove
-                    const updatedHired = currentHired.filter(employee => employee.id !== hiredEmployee.id);
-                    
-                    // Update the document with filtered array
-                    if (updatedHired.length > 0) {
-                        await setDoc(originalHiredRef, { 
-                            applicants: updatedHired,
-                            jobId: jobId
-                        }, { merge: true });
-                    } else {
-                        // If no hired employees left, delete the document
-                        await deleteDoc(originalHiredRef);
-                    }
-                }
-                
-                // 2. Remove from the new company-based structure
-                const hiredEmployeeRef = doc(db, "companies", companyName, "jobs", jobId, "hired", hiredEmployee.id);
-                await deleteDoc(hiredEmployeeRef);
-                
-                // 3. Update local state
-                setHiredApplicants(prev => ({
-                    ...prev,
-                    [jobId]: (prev[jobId] || []).filter(emp => emp.id !== hiredEmployee.id)
-                }));
-                
-                alert(`${hiredEmployee.name} has been removed from hired employees.`);
-            } catch (error) {
-                console.error("Error removing hired employee:", error);
-                alert("Failed to remove hired employee. Please try again.");
-            }
+        // Find the employee reference to be removed
+        const employeeIndex = currentHired.findIndex(employee => 
+          employee.id === hiredEmployee.id || 
+          (employee.reference && employee.reference.includes(hiredEmployee.id))
+        );
+        
+        if (employeeIndex !== -1) {
+          // Save the removed reference data to deletedFiles collection
+          await setDoc(doc(db, "deletedFiles", `removed-legacy-ref-${hiredEmployee.id}-${jobId}`), {
+            originalPath: `employers/${auth.currentUser.uid}/hired/${jobId}`,
+            removedReference: currentHired[employeeIndex],
+            deletedAt: new Date().toISOString(),
+            action: "removed_reference"
+          });
+          
+          // Remove the reference from the array
+          currentHired.splice(employeeIndex, 1);
+          
+          // Update the document with filtered array
+          if (currentHired.length > 0) {
+            await setDoc(legacyHiredRef, { 
+              applicants: currentHired,
+              jobId: jobId
+            }, { merge: true });
+          } else {
+            // If no references left, delete the document
+            await deleteDoc(legacyHiredRef);
+          }
         }
-    };
+      }
+      
+      // 2. Remove from the primary storage (company-based structure)
+      const hiredEmployeeRef = doc(db, "companies", companyName, "jobs", jobId, "hired", hiredEmployee.id);
+      const hiredEmployeeSnapshot = await getDoc(hiredEmployeeRef);
+      
+      if (hiredEmployeeSnapshot.exists()) {
+        // Save the hired employee data to deletedFiles collection for recovery if needed
+        await setDoc(doc(db, "deletedFiles", `removed-hire-${hiredEmployee.id}-${Date.now()}`), {
+          originalPath: `companies/${companyName}/jobs/${jobId}/hired/${hiredEmployee.id}`,
+          employeeData: hiredEmployeeSnapshot.data(),
+          deletedAt: new Date().toISOString(),
+          companyName: companyName,
+          jobId: jobId,
+          employeeId: hiredEmployee.id,
+          action: "removed_hired_employee"
+        });
+        
+        // Delete the document
+        await deleteDoc(hiredEmployeeRef);
+      } else {
+        console.warn("Hired employee document not found in primary storage path");
+      }
+      
+      // 3. Update local state
+      setHiredApplicants(prev => ({
+        ...prev,
+        [jobId]: (prev[jobId] || []).filter(emp => emp.id !== hiredEmployee.id)
+      }));
+      
+      alert(`${hiredEmployee.name} has been removed from hired employees.`);
+      
+    } catch (error) {
+      console.error("Error removing hired employee:", error);
+      alert("Failed to remove hired employee. Please try again.");
+    }
+  }
+};
 
     useEffect(() => {
         if (selectedJob) {
@@ -499,31 +546,48 @@ const EmployerProfile = () => {
         }
     }, [selectedJob]);
 
-    const fetchHiredEmployees = async (jobId) => {
-        if (!jobId) return;
-        
-        try {
-            const hiredRef = doc(db, "employers", auth.currentUser.uid, "hired", jobId);
-            const hiredDoc = await getDoc(hiredRef);
-            
-            if (hiredDoc.exists()) {
-                const hiredData = hiredDoc.data();
-                
-                setHiredApplicants(prev => ({
-                    ...prev,
-                    [jobId]: hiredData.applicants || []
-                }));
-            } else {
-                setHiredApplicants(prev => ({
-                    ...prev,
-                    [jobId]: []
-                }));
-            }
-        } catch (error) {
-            console.error("Error fetching hired employees:", error);
-        }
-    };
+    const fetchHiredEmployees = async (jobId, companyName) => {
+    if (!jobId || !companyName) return;
     
+    try {
+        // Get reference to the hired collection for this job
+        const hiredCollectionRef = collection(db, "companies", companyName, "jobs", jobId, "hired");
+        const hiredSnapshot = await getDocs(hiredCollectionRef);
+        
+        if (!hiredSnapshot.empty) {
+            // If there are hired applicants, collect their IDs
+            const hiredApplicantsIds = hiredSnapshot.docs.map(doc => doc.id);
+            
+            // For each hired applicant, get their full details
+            const hiredApplicantsData = await Promise.all(
+                hiredApplicantsIds.map(async (applicantId) => {
+                    const applicantRef = doc(db, "companies", companyName, "jobs", jobId, "hired", applicantId);
+                    const applicantDoc = await getDoc(applicantRef);
+                    if (applicantDoc.exists()) {
+                        return { id: applicantId, ...applicantDoc.data() };
+                    }
+                    return null;
+                })
+            );
+            
+            // Filter out any null values and update state
+            const validHiredApplicants = hiredApplicantsData.filter(Boolean);
+            
+            setHiredApplicants(prev => ({
+                ...prev,
+                [jobId]: validHiredApplicants
+            }));
+        } else {
+            // No hired applicants for this job
+            setHiredApplicants(prev => ({
+                ...prev,
+                [jobId]: []
+            }));
+        }
+    } catch (error) {
+        console.error("Error fetching hired employees:", error);
+    }
+};
     const [editedData, setEditedData] = useState({
         industry: "",
         location: "",
@@ -569,48 +633,86 @@ const EmployerProfile = () => {
     }, []);
 
     useEffect(() => {
-        const unsubscribeMap = {};
-    
-        jobPosts.forEach((job) => {
-            const applicationsRef = collection(db, "jobs", job.id, "applications");
-    
-            // Listen for real-time changes
-            const unsubscribe = onSnapshot(applicationsRef, (snapshot) => {
-                const applicantsData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    
-                setApplicants((prev) => ({
-                    ...prev,
-                    [job.id]: applicantsData,
-                }));
-            });
-    
-            unsubscribeMap[job.id] = unsubscribe;
+    const unsubscribeMap = {};
 
-            // Fetch hired applicants
-            const fetchHiredApplicants = async () => {
-                try {
-                    const hiredRef = collection(db, "employers", auth.currentUser.uid, "hired");
-                    const hiredDocRef = doc(hiredRef, job.id);
-                    const hiredDocSnap = await getDoc(hiredDocRef);
+    jobPosts.forEach((job) => {
+        // Set up listener for applications
+        const applicationsRef = collection(db, "jobs", job.id, "applications");
+
+        // Listen for real-time changes to applications
+        const unsubscribe = onSnapshot(applicationsRef, (snapshot) => {
+            const applicantsData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+            setApplicants((prev) => ({
+                ...prev,
+                [job.id]: applicantsData,
+            }));
+        });
+
+        unsubscribeMap[job.id] = unsubscribe;
+
+        // Fetch hired applicants based on the data structure from your screenshot
+        const fetchHiredApplicants = async () => {
+            try {
+                // First try the new structure from your screenshot
+                // Path: /companies/{companyName}/jobs/{jobId}/hired/
+                if (job.companyName) {
+                    const newHiredRef = collection(db, "companies", job.companyName, "jobs", job.id, "hired");
+                    const newHiredSnapshot = await getDocs(newHiredRef);
                     
-                    if (hiredDocSnap.exists()) {
+                    if (!newHiredSnapshot.empty) {
+                        // Map each hired applicant document to include its ID and data
+                        const hiredApplicantsData = newHiredSnapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ...doc.data()
+                        }));
+                        
                         setHiredApplicants(prev => ({
                             ...prev,
-                            [job.id]: hiredDocSnap.data().applicants || []
+                            [job.id]: hiredApplicantsData
                         }));
+                        
+                        // If we found applicants in the new structure, return early
+                        return;
                     }
-                } catch (error) {
-                    console.error("Error fetching hired applicants:", error);
                 }
-            };
-
-            fetchHiredApplicants();
-        });
-    
-        return () => {
-            Object.values(unsubscribeMap).forEach((unsubscribe) => unsubscribe());
+                
+                // Fall back to the existing structure if new structure had no results
+                // Path: employers/{uid}/hired/{jobId}
+                const hiredRef = collection(db, "employers", auth.currentUser.uid, "hired");
+                const hiredDocRef = doc(hiredRef, job.id);
+                const hiredDocSnap = await getDoc(hiredDocRef);
+                
+                if (hiredDocSnap.exists()) {
+                    setHiredApplicants(prev => ({
+                        ...prev,
+                        [job.id]: hiredDocSnap.data().applicants || []
+                    }));
+                } else {
+                    // Make sure we have an empty array if no hired applicants are found
+                    setHiredApplicants(prev => ({
+                        ...prev,
+                        [job.id]: []
+                    }));
+                }
+            } catch (error) {
+                console.error("Error fetching hired applicants for job", job.id, ":", error);
+                // Ensure we have an empty array even in case of error
+                setHiredApplicants(prev => ({
+                    ...prev,
+                    [job.id]: []
+                }));
+            }
         };
-    }, [jobPosts]);
+
+        fetchHiredApplicants();
+    });
+
+    // Clean up listeners on unmount
+    return () => {
+        Object.values(unsubscribeMap).forEach((unsubscribe) => unsubscribe());
+    };
+}, [jobPosts]);
 
     const handleJobClick = (job) => {
         setSelectedJob(job.id);
@@ -652,10 +754,32 @@ const EmployerProfile = () => {
     const handleDeleteJob = async (jobId) => {
         const confirmDelete = window.confirm("Are you sure you want to delete this job post?");
         if (confirmDelete) {
-            await deleteDoc(doc(db, "jobs", jobId));
-            setJobPosts((prev) => prev.filter((job) => job.id !== jobId));
-            alert("Job post deleted successfully!");
-        }
+    // Get reference to the job document
+    const jobRef = doc(db, "jobs", jobId);
+    
+    // Get the current job data before deleting
+    const jobSnapshot = await getDoc(jobRef);
+    
+    if (jobSnapshot.exists()) {
+        // Save the job data to deletedFiles collection
+        await setDoc(doc(db, "deletedFiles", `deleted-job-${jobId}`), {
+            originalPath: `jobs/${jobId}`,
+            jobData: jobSnapshot.data(),
+            deletedAt: serverTimestamp(),
+            jobId: jobId
+        });
+        
+        // Now delete the original job document
+        await deleteDoc(jobRef);
+        
+        // Update the UI state to remove the deleted job
+        setJobPosts((prev) => prev.filter((job) => job.id !== jobId));
+        alert("Job post deleted successfully!");
+    } else {
+        console.error("Job document doesn't exist, cannot backup before deletion");
+        alert("Error: Could not find job to delete");
+    }
+}
     };
 
     const handleCloseApplicantModal = () => {
@@ -665,7 +789,97 @@ const EmployerProfile = () => {
     const handleChange = (e) => {
         setEditedData({ ...editedData, [e.target.name]: e.target.value });
     };
+    const handleAcceptSend = async (job) => {
+        if (!selectedApplicant || !selectedJob || !employer) {
+            console.error("Missing required data (applicant, job, or employer).");
+            return;
+        }
 
+        try {
+            // Reference to the applicant's notifications subcollection
+            const notificationsRef = collection(db, "applicants", selectedApplicant.id, "notifications");
+            const jobRef = doc(db, "jobs", selectedJob);
+
+                // Then fetch the document
+            const jobSnapshot = await getDoc(jobRef);
+
+            const jobData = jobSnapshot.data();
+            const jobTitle = jobData.title; // Now you can access title
+               
+            const emailbody = `Your job application for ${jobTitle} have been accepted`
+            const emailsub = "Job Status"
+            // Create the notification object with company name, email subject, and email body
+            const newNotification = {
+                jobId: selectedJob,
+                companyName: employer.companyName,
+                subject: emailsub,
+                message: emailbody,
+                timestamp: new Date(),
+                status: "unread",
+            };
+
+            // Add the notification to Firestore
+            await addDoc(notificationsRef, newNotification);
+
+            console.log("Notification added successfully!");
+
+            // Show success alert
+            
+
+            // Close the applicant submission modal
+            setSelectedApplicant(null);
+            
+        } catch (error) {
+            console.error("Error sending email or updating Firestore:", error);
+            alert("Failed to send email. Please try again.");
+        }
+    };
+    const handleRejectSend = async (job) => {
+        if (!selectedApplicant || !selectedJob || !employer) {
+            console.error("Missing required data (applicant, job, or employer).");
+            return;
+        }
+
+        try {
+            // Reference to the applicant's notifications subcollection
+            const notificationsRef = collection(db, "applicants", selectedApplicant.id, "notifications");
+             const jobRef = doc(db, "jobs", selectedJob);
+
+                // Then fetch the document
+                const jobSnapshot = await getDoc(jobRef);
+
+               
+                // Access the data
+                const jobData = jobSnapshot.data();
+                const jobTitle = jobData.title; // Now you can access title
+               
+            const emailbody = `Your job application for ${jobTitle} have been rejected`
+            const emailsub = "Job Status"
+            // Create the notification object with company name, email subject, and email body
+            const newNotification = {
+                jobId: selectedJob,
+                companyName: employer.companyName,
+                subject: emailsub,
+                message: emailbody,
+                timestamp: new Date(),
+                status: "unread",
+            };
+            // Add the notification to Firestore
+            await addDoc(notificationsRef, newNotification);
+
+            console.log("Notification added successfully!");
+
+            // Show success alert
+            
+
+            // Close the applicant submission modal
+            setSelectedApplicant(null);
+            
+        } catch (error) {
+            console.error("Error sending email or updating Firestore:", error);
+            alert("Failed to send email. Please try again.");
+        }
+    };
     const handleEmailSend = async () => {
         if (!selectedApplicant || !selectedJob || !employer) {
             console.error("Missing required data (applicant, job, or employer).");
@@ -675,7 +889,7 @@ const EmployerProfile = () => {
         try {
             // Reference to the applicant's notifications subcollection
             const notificationsRef = collection(db, "applicants", selectedApplicant.id, "notifications");
-
+           
             // Create the notification object with company name, email subject, and email body
             const newNotification = {
                 jobId: selectedJob,
@@ -704,127 +918,210 @@ const EmployerProfile = () => {
     };
 
     // New functions for requirements
-    const handleHireApplicant = async () => {
-    if (!selectedApplicant || !selectedJob) {
-        console.error("No applicant or job selected");
-        return;
-    }
+  const handleHireApplicant = async () => {
+  if (!selectedApplicant || !selectedJob) {
+    console.error("No applicant or job selected");
+    return;
+  }
 
+  try {
+    // Get the employer's company name
+    const serverTimestamp = new Date().toISOString();
+    const employerRef = doc(db, "employers", auth.currentUser.uid);
+    const employerDoc = await getDoc(employerRef);
+    
+    if (!employerDoc.exists()) {
+      console.error("Employer document not found");
+      alert("Error: Employer profile not found");
+      return;
+    }
+    
+    const employerData = employerDoc.data();
+    const companyName = employerData.companyName;
+    
+    if (!companyName) {
+      console.error("Company name not found in employer data");
+      alert("Error: Company name not found in your profile");
+      return;
+    }
+    
+    // PRIMARY STORAGE: company-based structure
+    // 1. Ensure the company document exists
+    const companyDocRef = doc(db, "companies", companyName);
+    const companyDoc = await getDoc(companyDocRef);
+    
+    if (!companyDoc.exists()) {
+      // Create the company document if it doesn't exist
+      await setDoc(companyDocRef, {
+        companyName: companyName,
+        employerId: auth.currentUser.uid,
+        createdAt: serverTimestamp
+      });
+    }
+    
+    // 2. Ensure the job document exists under this company
+    const jobInCompanyRef = doc(db, "companies", companyName, "jobs", selectedJob);
+    const jobInCompanyDoc = await getDoc(jobInCompanyRef);
+    
+    if (!jobInCompanyDoc.exists()) {
+      // Get job data from the jobs collection
+      const jobRef = doc(db, "jobs", selectedJob);
+      const jobDoc = await getDoc(jobRef);
+      
+      if (jobDoc.exists()) {
+        // Add job to the company's jobs collection
+        await setDoc(jobInCompanyRef, {
+          ...jobDoc.data(),
+          companyName: companyName,
+          employerId: auth.currentUser.uid,
+          updatedAt: serverTimestamp
+        });
+      } else {
+        // If job doesn't exist, create a minimal entry
+        await setDoc(jobInCompanyRef, {
+          id: selectedJob,
+          companyName: companyName,
+          employerId: auth.currentUser.uid,
+          createdAt: serverTimestamp
+        });
+      }
+    }
+    
+    // 3. Check if applicant is already hired
+    const hiredApplicantRef = doc(db, "companies", companyName, "jobs", selectedJob, "hired", selectedApplicant.id);
+    const hiredApplicantDoc = await getDoc(hiredApplicantRef);
+    
+    if (hiredApplicantDoc.exists()) {
+      alert("This applicant has already been hired!");
+      return;
+    }
+    
+    // 4. Add the applicant to the hired subcollection under the job
+    await setDoc(hiredApplicantRef, {
+      ...selectedApplicant,
+      jobId: selectedJob,
+      companyName: companyName,
+      employerId: auth.currentUser.uid,
+      hiredAt: serverTimestamp
+    });
+    
+    // 5. Create a REFERENCE in the legacy structure (instead of duplicating data)
+    const originalHiredRef = doc(db, "employers", auth.currentUser.uid, "hired", selectedJob);
+    
+    // Get current hired applicants if they exist
+    const originalHiredDoc = await getDoc(originalHiredRef);
+    let currentHired = [];
+    
+    if (originalHiredDoc.exists()) {
+      currentHired = originalHiredDoc.data().applicants || [];
+    }
+    
+    // Add a reference to the applicant (storing ID only, not full data)
+    currentHired.push({
+      id: selectedApplicant.id,
+      reference: `companies/${companyName}/jobs/${selectedJob}/hired/${selectedApplicant.id}`
+    });
+    
+    // Update original Firestore location with reference
+    await setDoc(originalHiredRef, { 
+      applicants: currentHired,
+      jobId: selectedJob
+    }, { merge: true });
+    
+    // 6. Remove applicant from all jobs application collections where they've applied
+    // First, handle the current job's applications collection
+    const applicationRef = doc(db, "jobs", selectedJob, "applications", selectedApplicant.id);
+    
     try {
-        // Get the employer's company name
-        const serverTimestamp = new Date().toISOString();
-        const employerRef = doc(db, "employers", auth.currentUser.uid);
-        const employerDoc = await getDoc(employerRef);
+      const applicationSnapshot = await getDoc(applicationRef);
+      
+      if (applicationSnapshot.exists()) {
+        // Backup before deletion
+        await setDoc(doc(db, "deletedFiles", `hired-applicant-${selectedApplicant.id}-job-${selectedJob}`), {
+          originalPath: `jobs/${selectedJob}/applications/${selectedApplicant.id}`,
+          applicantData: applicationSnapshot.data(),
+          deletedAt: serverTimestamp,
+          jobId: selectedJob,
+          hiredReference: `companies/${companyName}/jobs/${selectedJob}/hired/${selectedApplicant.id}`
+        });
         
-        if (!employerDoc.exists()) {
-            console.error("Employer document not found");
-            alert("Error: Employer profile not found");
-            return;
-        }
-        
-        const employerData = employerDoc.data();
-        const companyName = employerData.companyName;
-        
-        if (!companyName) {
-            console.error("Company name not found in employer data");
-            alert("Error: Company name not found in your profile");
-            return;
-        }
-        
-        // 1. Add to the original hired subcollection (for backward compatibility)
-        const originalHiredRef = doc(db, "employers", auth.currentUser.uid, "hired", selectedJob);
-        
-        // Get current hired applicants if they exist
-        const originalHiredDoc = await getDoc(originalHiredRef);
-        let currentHired = [];
-
-        if (originalHiredDoc.exists()) {
-            currentHired = originalHiredDoc.data().applicants || [];
-        }
-
-        // Check if applicant is already hired
-        if (!currentHired.some(app => app.id === selectedApplicant.id)) {
-            // Add applicant to the hired list
-            currentHired.push(selectedApplicant);
-
-            // Update original Firestore location
-            await setDoc(originalHiredRef, { 
-                applicants: currentHired,
-                jobId: selectedJob
-            }, { merge: true });
+        // Delete from the current job's applications
+        await deleteDoc(applicationRef);
+        console.log(`Removed applicant ${selectedApplicant.id} from job ${selectedJob}`);
+      }
+      
+      // If you know the applicant might have applied to multiple jobs,
+      // check if we need to remove them from any other job applications
+      // This could be implemented different ways:
+      
+      // Option 1: If you have a record of which jobs they've applied to:
+      if (selectedApplicant.appliedJobs && Array.isArray(selectedApplicant.appliedJobs)) {
+        for (const jobId of selectedApplicant.appliedJobs) {
+          if (jobId !== selectedJob) { // Skip the one we already handled
+            const otherJobAppRef = doc(db, "jobs", jobId, "applications", selectedApplicant.id);
+            const otherAppSnapshot = await getDoc(otherJobAppRef);
             
-            // 2. Now add to the new company-based structure
-            // First, ensure the company document exists
-            const companyDocRef = doc(db, "companies", companyName);
-            const companyDoc = await getDoc(companyDocRef);
-            
-            if (!companyDoc.exists()) {
-                // Create the company document if it doesn't exist
-                await setDoc(companyDocRef, {
-                    companyName: companyName,
-                    employerId: auth.currentUser.uid,
-                    createdAt: serverTimestamp
-                });
+            if (otherAppSnapshot.exists()) {
+              // Backup before deletion
+              await setDoc(doc(db, "deletedFiles", `hired-applicant-${selectedApplicant.id}-job-${jobId}`), {
+                originalPath: `jobs/${jobId}/applications/${selectedApplicant.id}`,
+                applicantData: otherAppSnapshot.data(),
+                deletedAt: serverTimestamp,
+                originalJobId: jobId,
+                hiredJobId: selectedJob,
+                hiredReference: `companies/${companyName}/jobs/${selectedJob}/hired/${selectedApplicant.id}`
+              });
+              
+              // Delete from the other job's applications
+              await deleteDoc(otherJobAppRef);
+              console.log(`Removed applicant ${selectedApplicant.id} from job ${jobId}`);
             }
-            
-            // Ensure the job document exists under this company
-            const jobInCompanyRef = doc(db, "companies", companyName, "jobs", selectedJob);
-            const jobInCompanyDoc = await getDoc(jobInCompanyRef);
-            
-            if (!jobInCompanyDoc.exists()) {
-                // Get job data from the jobs collection
-                const jobRef = doc(db, "jobs", selectedJob);
-                const jobDoc = await getDoc(jobRef);
-                
-                if (jobDoc.exists()) {
-                    // Add job to the company's jobs collection
-                    await setDoc(jobInCompanyRef, {
-                        ...jobDoc.data(),
-                        companyName: companyName,
-                        employerId: auth.currentUser.uid,
-                        updatedAt: serverTimestamp
-                    });
-                } else {
-                    // If job doesn't exist, create a minimal entry
-                    await setDoc(jobInCompanyRef, {
-                        id: selectedJob,
-                        companyName: companyName,
-                        employerId: auth.currentUser.uid,
-                        createdAt: serverTimestamp()
-                    });
-                }
-            }
-            
-            // Add the applicant to the hired subcollection under the job
-            const hiredApplicantRef = doc(db, "companies", companyName, "jobs", selectedJob, "hired", selectedApplicant.id);
-            
-            await setDoc(hiredApplicantRef, {
-                ...selectedApplicant,
-                jobId: selectedJob,
-                companyName: companyName,
-                employerId: auth.currentUser.uid,
-                hiredAt: serverTimestamp
-            });
-
-            // 3. Delete applicant from jobs/{jobId}/applications
-            const applicantRef = doc(db, "jobs", selectedJob, "applications", selectedApplicant.id);
-            await deleteDoc(applicantRef);
-
-            // 4. Update local state
-            setHiredApplicants(prev => ({
-                ...prev,
-                [selectedJob]: [...(prev[selectedJob] || []), selectedApplicant]
-            }));
-
-            alert(`${selectedApplicant.name} has been hired!`);
-            setSelectedApplicant(null);
-        } else {
-            alert("This applicant has already been hired!");
+          }
         }
+      }
+
+      // Option 2: If you have a specific job ID that you know needs to be checked
+      // (using the specific path you mentioned)
+      const specificJobId = "job_1746972169732";
+      if (specificJobId !== selectedJob) { // Only if it's different from the current job
+        const specificPathRef = doc(db, "jobs", specificJobId, "applications", selectedApplicant.id);
+        const specificDoc = await getDoc(specificPathRef);
+        
+        if (specificDoc.exists()) {
+          // Backup before deletion
+          await setDoc(doc(db, "deletedFiles", `hired-applicant-${selectedApplicant.id}-job-${specificJobId}`), {
+            originalPath: `jobs/${specificJobId}/applications/${selectedApplicant.id}`,
+            applicantData: specificDoc.data(),
+            deletedAt: serverTimestamp,
+            originalJobId: specificJobId,
+            hiredJobId: selectedJob,
+            hiredReference: `companies/${companyName}/jobs/${selectedJob}/hired/${selectedApplicant.id}`
+          });
+          
+          // Delete from the specific job's applications
+          await deleteDoc(specificPathRef);
+          console.log(`Removed applicant ${selectedApplicant.id} from job ${specificJobId}`);
+        }
+      }
+      
     } catch (error) {
-        console.error("Error hiring applicant:", error);
-        alert("Failed to hire applicant. Please try again.");
+      console.error("Error removing applicant from job applications:", error);
+      // Continue with the hiring process even if removal fails
     }
+    
+    // 7. Update local state
+    setHiredApplicants(prev => ({
+      ...prev,
+      [selectedJob]: [...(prev[selectedJob] || []), selectedApplicant]
+    }));
+    
+    alert(`${selectedApplicant.name} has been hired!`);
+    setSelectedApplicant(null);
+    
+  } catch (error) {
+    console.error("Error hiring applicant:", error);
+    alert("Failed to hire applicant. Please try again.");
+  }
 };
     // const handleHireApplicant = async () => {
     //     if (!selectedApplicant || !selectedJob) {
@@ -889,7 +1186,26 @@ const EmployerProfile = () => {
                 }
                 else {
                     // Delete from applications subcollection
-                await deleteDoc(doc(db, "jobs", selectedJob, "applications", selectedApplicant.id));
+                // First, get the reference to the document that will be deleted
+                    const applicationRef = doc(db, "jobs", selectedJob, "applications", selectedApplicant.id);
+
+                    // Get the current data from the document before deleting it
+                    const applicationSnapshot = await getDoc(applicationRef);
+
+                    if (applicationSnapshot.exists()) {
+                    // Add the data to the deletedFiles collection with a reference to the rejected applicant
+                    await setDoc(doc(db, "deletedFiles", `rejected-applicant-${selectedApplicant.id}`), {
+                        originalPath: `jobs/${selectedJob}/applications/${selectedApplicant.id}`,
+                        applicantData: applicationSnapshot.data(),
+                        deletedAt: serverTimestamp(),
+                        jobId: selectedJob
+                    });
+                    
+                    // Now delete the original document
+                    await deleteDoc(applicationRef);
+                    } else {
+                    console.error("Application document doesn't exist, cannot backup before deletion");
+                    }
                 
                 // Update local state
                 setApplicants(prev => ({
@@ -928,11 +1244,191 @@ const EmployerProfile = () => {
             }
         }
     };
+    const handleOpenJob = async (jobId) => {
+        const confirmOpen = window.confirm("Are you sure you want to open this job post? It will be visible to applicants.");
+        if (confirmOpen) {
+            try {
+                await updateDoc(doc(db, "jobs", jobId), { status: "open" });
+                
+                // Update local state
+                setJobPosts(prev => prev.map(job => 
+                    job.id === jobId ? { ...job, status: "open" } : job
+                ));
+                
+                alert("Job post has been opened.");
+            } catch (error) {
+                console.error("Error closing job:", error);
+                alert("Failed to close job. Please try again.");
+            }
+        }
+    };
 
     const toggleHiredApplicants = (jobId) => {
         setSelectedJob(jobId);
         setShowHiredApplicants(!showHiredApplicants);
     };
+    const handleReportApplicant = async (e) => {
+  e.preventDefault();
+  
+  if (!auth.currentUser) {
+    alert("You must be logged in to report applicants.");
+    return;
+  }
+  
+  if (!reportReason) {
+    alert("Please select a reason for reporting this applicant.");
+    return;
+  }
+  
+  if (!reportDetails || reportDetails.trim().length < 10) {
+    alert("Please provide more details about the violation.");
+    return;
+  }
+  
+  setIsSubmitting(true);
+  
+  try {
+    const employerId = auth.currentUser.uid;
+    const employerRef = doc(db, "employers", employerId);
+    const employerSnap = await getDoc(employerRef);
+    
+    if (!employerSnap.exists()) {
+      alert("Employer profile not found!");
+      setIsSubmitting(false);
+      return;
+    }
+    
+    const employerData = employerSnap.data();
+    
+    // Create the report in a new collection
+    const reportsRef = collection(db, "job_reports");
+    await addDoc(reportsRef, {
+      applicantId: selectedApplicant.id,
+      applicantName: selectedApplicant.name,
+      applicantEmail: selectedApplicant.email,
+      jobId: selectedJob,
+      jobTitle: jobPosts.find(job => job.id === selectedJob)?.title || "Unknown Job",
+      reportedBy: employerId,
+      reporterName: employerData.companyName || "Anonymous Employer",
+      reporterEmail: employerData.email || "No email provided",
+      reason: reportReason,
+      details: reportDetails,
+      status: "pending", // pending, reviewed, resolved
+      createdAt: serverTimestamp(),
+    });
+    
+
+
+    
+    alert("Thank you for your report. Our team will review it shortly.");
+    setShowReportForm(false);
+    setReportReason("");
+    setReportDetails("");
+  } catch (error) {
+    console.error("Error submitting applicant report:", error);
+    alert("There was an error submitting your report. Please try again.");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+    const toggleReportForm = (e) => {
+      e.stopPropagation();
+      setShowReportForm(!showReportForm);
+    };
+    // Report form JSX
+    const reportForm = (
+      <div 
+        style={{
+          marginTop: "20px",
+          padding: "16px",
+          border: "1px solid #eee",
+          borderRadius: "8px",
+          backgroundColor: "#f9f9f9",
+        }}
+      >
+        <h3 style={{ marginTop: 0, color: "#d32f2f" }}>Report Job Listing</h3>
+        <form onSubmit={handleReportApplicant}>
+          <div style={{ marginBottom: "16px" }}>
+            <label style={{ display: "block", marginBottom: "8px", fontWeight: "bold" }}>
+              Reason for Report:*
+            </label>
+            <select
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #ddd",
+              }}
+              required
+            >
+              <option value="">-- Select a reason --</option>
+              <option value="Discriminatory content">Discriminatory content</option>
+              <option value="Misleading information">Misleading information</option>
+              <option value="Inappropriate salary/compensation">Inappropriate salary/compensation</option>
+              <option value="Scam/Fraud">Scam or fraudulent posting</option>
+              <option value="Duplicate posting">Duplicate posting</option>
+              <option value="Unprofessional language">Unprofessional language</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          
+          <div style={{ marginBottom: "16px" }}>
+            <label style={{ display: "block", marginBottom: "8px", fontWeight: "bold" }}>
+              Details:*
+            </label>
+            <textarea
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #ddd",
+                minHeight: "100px",
+                resize: "vertical",
+              }}
+              placeholder="Please provide specific details about the violation..."
+              required
+            />
+          </div>
+          
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{
+                backgroundColor: "#d32f2f",
+                color: "#fff",
+                padding: "10px 16px",
+                borderRadius: "4px",
+                border: "none",
+                cursor: isSubmitting ? "not-allowed" : "pointer",
+                opacity: isSubmitting ? 0.7 : 1,
+              }}
+            >
+              {isSubmitting ? "Submitting..." : "Submit Report"}
+            </button>
+            
+            <button
+              type="button"
+              onClick={toggleReportForm}
+              style={{
+                backgroundColor: "#757575",
+                color: "#fff",
+                padding: "10px 16px",
+                borderRadius: "4px",
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    );
 
     const getSortedApplicants = (jobId) => {
         if (!applicants[jobId]) return [];
@@ -949,8 +1445,13 @@ const EmployerProfile = () => {
     };
     const ApplicantDetailsModal = ({ cert, onClose }) => {
   if (!cert) return null;
-
+    
   return (
+    <AnimatedGroup 
+            className="my-12 space-y-6 bg-gray-50 p-6 rounded-lg shadow-md"
+            baseDelay={0.2}  // Start delay (seconds)
+            delayIncrement={0.15}  // Each child adds this much delay
+          >
     <div style={{
       position: 'fixed',
       top: 0, left: 0, right: 0, bottom: 0,
@@ -983,12 +1484,18 @@ const EmployerProfile = () => {
         <button onClick={onClose} style={{ marginTop: '15px' }}>Close</button>
       </div>
     </div>
+    </AnimatedGroup>
   );
 };
 
       
       
     return (
+        <AnimatedGroup 
+                className="my-12 space-y-6 bg-gray-50 p-6 rounded-lg shadow-md"
+                baseDelay={0.2}  // Start delay (seconds)
+                delayIncrement={0.15}  // Each child adds this much delay
+              >
         <div className="employer-profile" style={{ 
             maxWidth: "1200px", 
             margin: "0 auto", 
@@ -1370,6 +1877,19 @@ const EmployerProfile = () => {
                                                         Closed
                                                     </span>
                                                 )}
+                                                {job.status === "open" && (
+                                                    <span style={{ 
+                                                        color: "white", 
+                                                        fontSize: "14px", 
+                                                        fontWeight: "normal", 
+                                                        marginLeft: "10px",
+                                                        padding: "3px 8px",
+                                                        backgroundColor: "#73f071",
+                                                        borderRadius: "4px"
+                                                    }}>
+                                                        Active
+                                                    </span>
+                                                )}
                                             </h4>
                                             <div style={{ display: "flex", gap: "10px" }}>
                                                 <button 
@@ -1386,6 +1906,21 @@ const EmployerProfile = () => {
                                                     }}
                                                 >
                                                     Close Job
+                                                </button>
+                                                  <button 
+                                                    onClick={() => handleOpenJob(job.id)} 
+                                                    disabled={job.status != "closed"}
+                                                    style={{
+                                                        padding: "5px 10px",
+                                                        backgroundColor: job.status === "closed" ? "#2ecc71" : "#cccccc",
+                                                        color: "#fff",
+                                                        border: "none",
+                                                        borderRadius: "4px",    
+                                                        cursor: job.status === "closed" ? "pointer" : "not-allowed",
+                                                        fontSize: "12px"
+                                                    }}
+                                                >
+                                                    Open Job
                                                 </button>
                                                 <button 
                                                     onClick={() => handleDeleteJob(job.id)}
@@ -1495,6 +2030,7 @@ const EmployerProfile = () => {
                                             >
                                                 View Hired
                                             </button>
+                                            
                                         </div>
 
                                         {selectedJob === job.id && !showHiredApplicants && (
@@ -1889,7 +2425,27 @@ const EmployerProfile = () => {
                                 &times;
                             </button>
                         </div>
-                        
+                        {showReportForm ? (
+          reportForm
+        ) : (
+          <button
+            onClick={toggleReportForm}
+            style={{
+              backgroundColor: "#ff9800",
+              color: "#fff",
+              padding: "8px 14px",
+              borderRadius: "4px",
+              border: "none",
+              cursor: "pointer",
+              marginTop: "20px",
+              display: "flex",
+              alignItems: "center",
+              fontSize: "14px",
+            }}
+          >
+            <span style={{ marginRight: "6px" }}>⚠️</span> Report Applicant
+          </button>
+        )}
                         <div style={{ padding: '25px' }}>
                             {/* Profile and basic info */}
                             <div style={{ 
@@ -2457,7 +3013,10 @@ const EmployerProfile = () => {
                         }}>
                             <button 
                                 className="hire-btn" 
-                                onClick={handleHireApplicant}
+                                onClick={() => {
+                                handleHireApplicant();
+                                handleAcceptSend(selectedJob);
+                                }}
                                 style={{
                                     backgroundColor: '#2ecc71',
                                     color: '#fff',
@@ -2477,7 +3036,9 @@ const EmployerProfile = () => {
                             </button>
                             <button 
                                 className="reject-btn" 
-                                onClick={() => handleRejectApplicant(selectedApplicant, selectedJob)}
+                                onClick={() => {handleRejectApplicant(selectedApplicant, selectedJob);
+                                    handleRejectSend(selectedJob);
+                                }   }
                                 style={{
                                     backgroundColor: '#e74c3c',
                                     color: '#fff',
@@ -2652,8 +3213,251 @@ const EmployerProfile = () => {
 
                 </div>
             </div>
+            
         )}
+         <style jsx>{`
+
+    body {
+  overflow-x: hidden !important;
+}
+       * {
+  box-sizing: border-box;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+html, body {
+  max-width: 100%;
+  width: 100%;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+#root, 
+.app, 
+.ski-folio-dashboard {
+  max-width: 100%;
+  width: 100%;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+.ski-folio-dashboard {
+  font-family: Arial, sans-serif;
+  background-color: #f0f2f5;
+  min-height: 100vh;
+  position: relative;
+  margin: 0;
+  padding: 0;
+}
+
+.mobile-header {
+  width: 100%;
+  max-width: 100%;
+  background: linear-gradient(to right, #4eb3ff, #2196f3);
+  color: white;
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: 0;
+}
+
+.dashboard-content {
+  width: 100%;
+  max-width: 100%;
+  padding: 15px;
+  margin: 0;
+  overflow: hidden;
+}
+
+.profile-section,
+.jobs-section {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.profile-section {
+  background-color: white;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.contact-info p {
+  margin-bottom: 10px;
+  font-size: 14px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.edit-profile-btn {
+  width: 100%;
+  padding: 10px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+.jobs-section {
+  background-color: white;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.job-card {
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  overflow: hidden;
+}
+
+.job-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  width: 100%;
+}
+
+.job-actions button {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.job-view-buttons {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.job-view-buttons button {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.hired-applicants-section {
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  padding: 15px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.hired-applicant {
+  display: flex;
+  align-items: center;
+  background-color: white;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.hired-applicant-initial {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #2196f3;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 10px;
+  font-weight: bold;
+}
+
+.hired-applicant-details {
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.hired-applicant-details h4 {
+  margin: 0;
+  font-size: 14px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.hired-applicant-details p {
+  margin: 0;
+  font-size: 12px;
+  color: #666;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.job-header, 
+.job-actions, 
+.job-view-buttons {
+  flex-wrap: wrap;
+}
+
+.job-actions button,
+.job-view-buttons button {
+  flex: 1 1 100%;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.hired-applicant-details p,
+.hired-applicant-details h4 {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+@media screen and (max-width: 480px) {
+  * {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  
+  .job-actions {
+    flex-direction: column;
+  }
+
+  .job-actions button {
+    width: 100%;
+  }
+}
+      `}</style>
     </div>
+    </AnimatedGroup>
 );
 };
 
